@@ -1,13 +1,10 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { tavily } from "@tavily/core";
 import { z } from "zod";
 import { AgentState } from "../state";
 
-const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "" });
-
 // Structured schema for challenge assessment
 const challengeSchema = z.object({
-  hasMaterialEvidence: z.boolean().describe("Set to true ONLY if we found concrete, negative financial/operational facts or developments that are NOT already addressed in the thesis and require us to revise/tone down our outlook."),
+  hasMaterialEvidence: z.boolean().describe("Set to true ONLY if we found concrete, negative financial/operational facts or developments in the bear context that are NOT already addressed in the thesis and require us to revise/tone down our outlook."),
   challengeEvidence: z.string().describe("A summary of the negative evidence or risks surfaced by the search. If hasMaterialEvidence is false, summarize the search results briefly but note why they are not new or material."),
   explanation: z.string().describe("A brief explanation of your decision (e.g. why the evidence is material or why it's already accounted for).")
 });
@@ -16,31 +13,17 @@ export async function challengeThesisNode(state: typeof AgentState.State) {
   const companyName = state.companyName;
   const ticker = state.ticker;
   const currentThesis = state.thesis;
+  const preFetchedBearContext = state.challengeEvidence || "No pre-fetched bearish results found.";
   const loopCount = state.loopCount;
   const logs: string[] = [];
 
-  logs.push(`Challenging the thesis: searching for negative news, risks, and bear arguments...`);
+  logs.push(`Evaluating pre-fetched disconfirming evidence against investment thesis...`);
 
-  // 1. Search for disconfirming / bearish news
-  let bearContext = "";
-  try {
-    const query = `"${companyName}" OR "${ticker}" risks negative critique problems debt high valuation drop 2026`;
-    const searchResult = await tvly.search(query, {
-      searchDepth: "advanced",
-      maxResults: 6,
-    });
-
-    bearContext = searchResult.results?.map((r: any) => `Title: ${r.title}\nContent: ${r.content}\nURL: ${r.url}`).join("\n\n") || "No bearish results found.";
-  } catch (error: any) {
-    logs.push(`Warning: Bearish search failed: ${error.message || error}`);
-    bearContext = "Web search failed.";
-  }
-
-  // 2. Ask Gemini to evaluate the disconfirming evidence
+  // Ask Gemini to evaluate the pre-fetched disconfirming evidence against the current thesis
   const model = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
     apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
-    temperature: 0.1, // low temperature for analytical evaluation
+    temperature: 0.1,
   });
 
   const structuredModel = model.withStructuredOutput(challengeSchema);
@@ -52,13 +35,13 @@ COMPANY: ${companyName} (${ticker})
 CURRENT THESIS:
 ${currentThesis}
 
---- RECENT BEARISH/RISK SEARCH RESULTS ---
-${bearContext}
+--- BEARISH/RISK CONTEXT ---
+${preFetchedBearContext}
 
 Your task:
-1. Carefully compare the recent risk search results against the CURRENT THESIS.
-2. Determine if the search results contain material, concrete, negative developments, financial metrics, or operational facts that are NOT currently addressed in the thesis.
-3. If they do, set hasMaterialEvidence = true and outline these details in challengeEvidence. This will trigger a revision loop.
+1. Carefully compare the bearish/risk context against the CURRENT THESIS.
+2. Determine if the bearish context contains material, concrete, negative developments, financial metrics, or operational facts that are NOT currently addressed in the thesis.
+3. If it does, set hasMaterialEvidence = true and outline these details in challengeEvidence. This will trigger a revision loop.
 4. If the risks are already fully addressed, or if they are purely speculative/immaterial, set hasMaterialEvidence = false.
 5. Provide a clear, objective explanation.
 

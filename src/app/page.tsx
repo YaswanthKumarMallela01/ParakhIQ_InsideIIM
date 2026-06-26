@@ -10,10 +10,18 @@ export default function LandingPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+
+  // OTP Verification flow state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     // Redirect if already authenticated
@@ -28,40 +36,91 @@ export default function LandingPage() {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      if (isSignUp) {
+        const res = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "send-otp",
+            email,
+            password,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "Failed to send OTP verification email");
+        }
+
+        setOtpSent(true);
+        setSuccessMsg(`OTP code has been sent to ${email}`);
+      } else {
+        const res = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sign-in",
+            email,
+            password,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "Authentication failed");
+        }
+
+        router.push("/research");
+        router.refresh();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to complete request.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifying(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
 
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: isSignUp ? "sign-up" : "sign-in",
+          action: "verify-otp",
           email,
-          password,
+          otp: otpCode,
         }),
       });
 
       const data = await res.json();
       if (!res.ok || data.error) {
-        throw new Error(data.error || "Authentication failed");
+        throw new Error(data.error || "OTP verification failed");
       }
 
-      if (isSignUp) {
-        setErrorMsg("Account created! Check your email for verification or sign in.");
-        setIsSignUp(false);
-      } else {
+      setSuccessMsg("Account verified successfully! Logging you in...");
+      setTimeout(() => {
         router.push("/research");
         router.refresh();
-      }
+      }, 500);
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to log in.");
+      setErrorMsg(err.message || "Verification code is incorrect or expired.");
     } finally {
-      setIsLoading(false);
+      setIsVerifying(false);
     }
   };
 
   const handleContinueAsGuest = async () => {
     setIsGuestLoading(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     try {
       const res = await fetch("/api/auth", {
@@ -85,7 +144,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
+    <div className="flex-1 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden terminal-grid min-h-screen">
       {/* Visual background details */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-10" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl -z-10" />
@@ -102,89 +161,167 @@ export default function LandingPage() {
           <p className="text-xs font-mono text-on-surface-variant uppercase tracking-wider">
             Analytical Intelligence for Indian Equity Markets
           </p>
-          <p className="text-[10px] font-mono text-error/80 uppercase">
+          <p className="text-[10px] font-mono text-error/85 uppercase">
             research tool, not financial advice
           </p>
         </div>
 
         {errorMsg && (
-          <div className="bg-surface-container-low border border-outline text-xs p-3 rounded font-mono text-center">
-            {errorMsg}
+          <div className="bg-error/10 border border-error/30 text-error text-xs p-3 rounded font-mono text-center leading-relaxed">
+            [ERROR] {errorMsg}
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="block text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
-              Email Address
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              className="w-full bg-surface-container-lowest border border-outline-variant rounded p-3 text-xs font-mono text-on-surface focus:outline-none focus:border-primary transition-colors"
-            />
+        {successMsg && (
+          <div className="bg-primary/10 border border-primary/30 text-primary text-xs p-3 rounded font-mono text-center leading-relaxed">
+            [STATUS] {successMsg}
           </div>
+        )}
 
-          <div className="space-y-1">
-            <label className="block text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="w-full bg-surface-container-lowest border border-outline-variant rounded p-3 text-xs font-mono text-on-surface focus:outline-none focus:border-primary transition-colors"
-            />
-          </div>
+        {/* OTP Verification form step */}
+        {otpSent ? (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <label className="block text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                  Enter 6-Digit OTP Code
+                </label>
+                <span className="text-[9px] font-mono text-secondary">SMTP VERIFICATION</span>
+              </div>
+              <input
+                type="text"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                required
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded p-3 text-center text-lg font-mono tracking-[1em] pl-[1.1em] text-primary focus:outline-none focus:border-primary transition-colors"
+              />
+              <p className="text-[10px] text-on-surface-variant font-mono leading-relaxed pt-1">
+                A verification code has been dispatched to your email. Check your inbox (and spam folder) for the 6-digit OTP code.
+              </p>
+            </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-primary text-on-primary font-bold py-3 rounded text-xs font-mono tracking-widest hover:bg-primary/95 transition-all select-none cursor-pointer"
-          >
-            {isLoading ? "AUTHENTICATING..." : isSignUp ? "SIGN UP" : "SIGN IN"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={isVerifying}
+              className="w-full bg-primary text-on-primary font-bold py-3 rounded text-xs font-mono tracking-widest hover:bg-primary/95 transition-all select-none cursor-pointer"
+            >
+              {isVerifying ? "VERIFYING CODE..." : "VERIFY & CREATE ACCOUNT"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOtpSent(false);
+                setOtpCode("");
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="w-full bg-transparent border border-outline-variant hover:bg-surface-container-low text-on-surface-variant font-bold py-3 rounded text-xs font-mono tracking-widest transition-all cursor-pointer"
+            >
+              CANCEL & CHANGE EMAIL
+            </button>
+          </form>
+        ) : (
+          /* Normal Sign In / Sign Up form */
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded p-3 text-xs font-mono text-on-surface focus:outline-none focus:border-primary transition-colors"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <label className="block text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-[9px] font-mono text-secondary hover:underline bg-transparent border-none cursor-pointer"
+                >
+                  {showPassword ? "[ HIDE PASSWORD ]" : "[ SHOW PASSWORD ]"}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded p-3 text-xs font-mono text-on-surface focus:outline-none focus:border-primary transition-colors pr-10"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-primary text-on-primary font-bold py-3 rounded text-xs font-mono tracking-widest hover:bg-primary/95 transition-all select-none cursor-pointer"
+            >
+              {isLoading
+                ? "AUTHENTICATING..."
+                : isSignUp
+                ? "SEND VERIFICATION CODE"
+                : "SIGN IN"}
+            </button>
+          </form>
+        )}
 
         {/* Separator / Switch auth type */}
-        <div className="flex items-center justify-between text-xs font-mono text-on-surface-variant pt-2">
-          <span>
-            {isSignUp ? "Already have an account?" : "Need an account?"}
-          </span>
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-secondary hover:underline bg-transparent border-0 cursor-pointer"
-          >
-            {isSignUp ? "SIGN IN" : "SIGN UP"}
-          </button>
-        </div>
+        {!otpSent && (
+          <div className="flex items-center justify-between text-xs font-mono text-on-surface-variant pt-2">
+            <span>
+              {isSignUp ? "Already have an account?" : "Need an account?"}
+            </span>
+            <button
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-secondary hover:underline bg-transparent border-0 cursor-pointer"
+            >
+              {isSignUp ? "SIGN IN" : "SIGN UP"}
+            </button>
+          </div>
+        )}
 
         {/* Divider line */}
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-outline-variant/30"></div>
-          <span className="flex-shrink mx-4 text-[10px] font-mono text-on-surface-variant">OR</span>
-          <div className="flex-grow border-t border-outline-variant/30"></div>
-        </div>
+        {!otpSent && (
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-outline-variant/30"></div>
+            <span className="flex-shrink mx-4 text-[10px] font-mono text-on-surface-variant">OR</span>
+            <div className="flex-grow border-t border-outline-variant/30"></div>
+          </div>
+        )}
 
         {/* Guest Mode */}
-        <div className="space-y-3">
-          <button
-            onClick={handleContinueAsGuest}
-            disabled={isGuestLoading}
-            className="w-full bg-transparent border border-secondary text-secondary hover:bg-secondary/5 font-bold py-3 rounded text-xs font-mono tracking-widest transition-all cursor-pointer"
-          >
-            {isGuestLoading ? "SEEDING DEMO PORTFOLIO..." : "CONTINUE AS GUEST"}
-          </button>
-          <p className="text-[10px] text-center font-mono text-on-surface-variant leading-relaxed">
-            Explore with a pre-loaded demo portfolio. No sign-up required.
-          </p>
-        </div>
+        {!otpSent && (
+          <div className="space-y-3">
+            <button
+              onClick={handleContinueAsGuest}
+              disabled={isGuestLoading}
+              className="w-full bg-transparent border border-secondary text-secondary hover:bg-secondary/5 font-bold py-3 rounded text-xs font-mono tracking-widest transition-all cursor-pointer"
+            >
+              {isGuestLoading ? "SEEDING DEMO PORTFOLIO..." : "CONTINUE AS GUEST"}
+            </button>
+            <p className="text-[10px] text-center font-mono text-on-surface-variant leading-relaxed">
+              Explore with a pre-loaded demo portfolio. No sign-up required.
+            </p>
+          </div>
+        )}
 
         {/* Feature Highlights Footer */}
         <div className="border-t border-outline-variant/30 pt-4 grid grid-cols-2 gap-4 text-left">

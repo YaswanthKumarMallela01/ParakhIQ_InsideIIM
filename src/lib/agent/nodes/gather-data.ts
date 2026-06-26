@@ -2,7 +2,6 @@ import yahooFinance from "yahoo-finance2";
 import { tavily } from "@tavily/core";
 import { AgentState, PricePoint, NewsArticle, Fundamentals } from "../state";
 
-// Initialize Tavily Client
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "" });
 
 export async function gatherDataNode(state: typeof AgentState.State) {
@@ -10,9 +9,8 @@ export async function gatherDataNode(state: typeof AgentState.State) {
   const companyName = state.companyName;
   const logs: string[] = [];
 
-  logs.push(`Gathering price history, fundamentals, and recent news for ${ticker}...`);
+  logs.push(`Gathering price history, fundamentals, and web news for ${ticker}...`);
 
-  // Calculate dates for 1 year of price history
   const today = new Date();
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(today.getFullYear() - 1);
@@ -30,15 +28,43 @@ export async function gatherDataNode(state: typeof AgentState.State) {
   };
   let newsArticles: NewsArticle[] = [];
   let sectorContext = "Sector data unavailable";
+  let challengeEvidence = "Bearish risk data unavailable";
 
-  // 1. Fetch Price History
+  // 1. Fetch Price History & Fundamentals from Yahoo Finance
   try {
-    const historyResult = await yahooFinance.historical(ticker, {
-      period1: oneYearAgo.toISOString().split("T")[0],
-      period2: today.toISOString().split("T")[0],
-      interval: "1d",
-    });
+    let historyResult: any = null;
+    let summary: any = null;
 
+    await Promise.all([
+      (async () => {
+        try {
+          historyResult = await yahooFinance.historical(ticker, {
+            period1: oneYearAgo.toISOString().split("T")[0],
+            period2: today.toISOString().split("T")[0],
+            interval: "1d",
+          });
+        } catch (err: any) {
+          logs.push(`Warning: Failed price history fetch: ${err.message}`);
+        }
+      })(),
+      (async () => {
+        try {
+          summary = await yahooFinance.quoteSummary(ticker, {
+            modules: [
+              "summaryDetail",
+              "financialData",
+              "defaultKeyStatistics",
+              "majorHoldersBreakdown",
+              "price",
+            ],
+          });
+        } catch (err: any) {
+          logs.push(`Warning: Failed quoteSummary fetch: ${err.message}`);
+        }
+      })()
+    ]);
+
+    // Parse History
     if (Array.isArray(historyResult)) {
       priceHistory = (historyResult as any)
         .map((p: any) => ({
@@ -48,105 +74,78 @@ export async function gatherDataNode(state: typeof AgentState.State) {
         .filter((p: any) => p.date && p.close > 0);
       logs.push(`Fetched ${priceHistory.length} price points for 1Y history.`);
     }
-  } catch (error: any) {
-    logs.push(`Warning: Failed to fetch price history: ${error.message || error}`);
-  }
 
-  // 2. Fetch Fundamentals from Yahoo Finance quoteSummary
-  try {
-    const summary = (await yahooFinance.quoteSummary(ticker, {
-      modules: [
-        "summaryDetail",
-        "financialData",
-        "defaultKeyStatistics",
-        "majorHoldersBreakdown",
-        "price",
-      ],
-    })) as any;
-
+    // Parse Fundamentals
     if (summary) {
-      // Market Cap
-      if (summary.summaryDetail?.marketCap) {
-        fundamentals.marketCap = summary.summaryDetail.marketCap;
-      }
+      const s = summary as any;
+      if (s.summaryDetail?.marketCap) fundamentals.marketCap = s.summaryDetail.marketCap;
+      if (s.summaryDetail?.trailingPE) fundamentals.peRatio = s.summaryDetail.trailingPE;
+      else if (s.summaryDetail?.forwardPE) fundamentals.peRatio = s.summaryDetail.forwardPE;
+      if (s.summaryDetail?.fiftyTwoWeekHigh) fundamentals.fiftyTwoWeekHigh = s.summaryDetail.fiftyTwoWeekHigh;
+      if (s.summaryDetail?.fiftyTwoWeekLow) fundamentals.fiftyTwoWeekLow = s.summaryDetail.fiftyTwoWeekLow;
       
-      // PE Ratio
-      if (summary.summaryDetail?.trailingPE) {
-        fundamentals.peRatio = summary.summaryDetail.trailingPE;
-      } else if (summary.summaryDetail?.forwardPE) {
-        fundamentals.peRatio = summary.summaryDetail.forwardPE;
+      if (s.financialData?.debtToEquity) {
+        const de = s.financialData.debtToEquity;
+        fundamentals.debtToEquity = de > 5 ? de / 100 : de;
       }
 
-      // 52W High / Low
-      if (summary.summaryDetail?.fiftyTwoWeekHigh) {
-        fundamentals.fiftyTwoWeekHigh = summary.summaryDetail.fiftyTwoWeekHigh;
+      if (s.majorHoldersBreakdown?.insidersPercent) {
+        fundamentals.promoterHolding = s.majorHoldersBreakdown.insidersPercent * 100;
+      } else if (s.defaultKeyStatistics?.heldPercentInsiders) {
+        fundamentals.promoterHolding = s.defaultKeyStatistics.heldPercentInsiders * 100;
       }
-      if (summary.summaryDetail?.fiftyTwoWeekLow) {
-        fundamentals.fiftyTwoWeekLow = summary.summaryDetail.fiftyTwoWeekLow;
-      }
-
-      // Debt to Equity
-      if (summary.financialData?.debtToEquity) {
-        // Yahoo Finance sometimes returns D/E as percentage (e.g. 42 for 0.42) or decimal.
-        const de = summary.financialData.debtToEquity;
-        fundamentals.debtToEquity = de > 5 ? de / 100 : de; // normalize if > 5 (likely percentage)
-      }
-
-      // Promoter holdings
-      // Try majorHoldersBreakdown -> insidersPercent
-      if (summary.majorHoldersBreakdown?.insidersPercent) {
-        fundamentals.promoterHolding = summary.majorHoldersBreakdown.insidersPercent * 100;
-      } else if (summary.defaultKeyStatistics?.heldPercentInsiders) {
-        fundamentals.promoterHolding = summary.defaultKeyStatistics.heldPercentInsiders * 100;
-      }
-      
-      logs.push(`Fetched basic financial data from Yahoo Finance.`);
+      logs.push(`Yahoo Finance financial metrics loaded.`);
     }
   } catch (error: any) {
-    logs.push(`Warning: Failed to fetch fundamentals from Yahoo Finance: ${error.message || error}`);
+    logs.push(`Warning: Failed fetching fundamentals: ${error.message || error}`);
   }
 
-  // 3. Parallel web search using Tavily for recent news, sector PE, promoter holding trend
+  // 2. Parallel Web Search using Tavily for News, Sector averages, and Bearish risks
   try {
+    const isIndian = ticker.endsWith(".NS") || ticker.endsWith(".BO");
+    const marketIndicator = isIndian ? "Indian stock market" : "global stock market";
+
     const queries = [
-      `"${companyName}" OR "${ticker}" recent news financial analysis 2026`,
-      `"${companyName}" OR "${ticker}" average sector PE ratio Indian stock market`,
-      `"${companyName}" OR "${ticker}" promoter shareholding holding trend increase decrease`,
+      `"${companyName}" OR "${ticker}" news updates financials 2026`,
+      `"${companyName}" OR "${ticker}" sector PE ratio average ${marketIndicator}`,
+      `"${companyName}" OR "${ticker}" risks problems critiques bearish negatives 2026`,
     ];
+
+    logs.push("Running parallel news, sector context, and risk searches via Tavily...");
 
     const searchPromises = queries.map((q) =>
       tvly.search(q, {
-        searchDepth: "basic",
-        maxResults: 6,
+        searchDepth: "basic", // Basic search is much faster than advanced (2s vs 8s)
+        maxResults: 5,
       })
     );
 
-    const [newsResults, sectorResults, shareholdingResults] = await Promise.all(searchPromises);
+    const [newsResults, sectorResults, bearResults] = await Promise.all(searchPromises);
 
     // Parse News
-    if (newsResults && newsResults.results) {
+    if (newsResults?.results) {
       newsArticles = newsResults.results.map((r: any) => ({
         title: r.title || "News Article",
         url: r.url || "",
         content: r.content || "",
       }));
-      logs.push(`Fetched ${newsArticles.length} recent news/analysis articles via Tavily.`);
     }
 
-    // Try to extract Sector P/E from Tavily results if unavailable from Yahoo Finance
-    const sectorContentText = sectorResults.results?.map((r: any) => r.content).join("\n") || "";
-    sectorContext = sectorContentText;
-    
-    // Parse promoter shareholding info if not fetched by Yahoo Finance
-    const holdingContentText = shareholdingResults.results?.map((r: any) => r.content).join("\n") || "";
+    // Parse Sector PE
+    if (sectorResults?.results) {
+      sectorContext = sectorResults.results.map((r: any) => r.content).join("\n");
+    }
 
-    // Fallback extraction through simple heuristics (LLM in next nodes will do heavy extraction,
-    // but let's see if we can identify changes in promoter holding trend).
-    // We will save these texts in the state so build_thesis can extract them accurately.
-    logs.push(`Fetched sector and shareholding context via Tavily.`);
+    // Parse Bearish Risks
+    if (bearResults?.results) {
+      challengeEvidence = bearResults.results
+        .map((r: any) => `Title: ${r.title}\nContent: ${r.content}\nURL: ${r.url}`)
+        .join("\n\n");
+    }
 
+    logs.push(`Tavily web research completed successfully.`);
   } catch (error: any) {
-    logs.push(`Warning: Failed web search via Tavily: ${error.message || error}`);
+    logs.push(`Warning: Failed Tavily search: ${error.message || error}`);
   }
 
   return {
@@ -154,6 +153,7 @@ export async function gatherDataNode(state: typeof AgentState.State) {
     fundamentals,
     newsArticles,
     sectorContext,
+    challengeEvidence,
     logs,
   };
 }

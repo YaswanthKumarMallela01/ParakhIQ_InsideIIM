@@ -21,6 +21,10 @@ export default function SettingsPage() {
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Account deletion states
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const fetchSettings = async (currentUser: any) => {
     setIsLoading(true);
     try {
@@ -89,8 +93,8 @@ export default function SettingsPage() {
     setMessage(null);
 
     try {
-      // Sign up the guest user to a permanent account
-      // In Supabase, linking an anonymous session is supported by signUp()
+      // Custom OTP flow: we can send them OTP, or directly trigger admin upgrade if in session
+      // For simplicity and matching landing flow, trigger standard supabase signup
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -98,7 +102,6 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
-      // Transfer preferences
       await fetch("/api/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -110,13 +113,36 @@ export default function SettingsPage() {
         text: "Account upgraded successfully! You are now logged in and email digests are active.",
       });
       
-      // Fetch new user session details
       const { data: { user: updatedUser } } = await supabase.auth.getUser();
       setUser(updatedUser);
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Failed to upgrade account." });
     } finally {
       setUpgradeLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete-account" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to delete account");
+      }
+
+      router.push("/");
+      router.refresh();
+    } catch (err: any) {
+      alert(`Account deletion failed: ${err.message}`);
+      setDeleteConfirm(false);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -297,6 +323,47 @@ export default function SettingsPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="bg-surface-container border border-error/30 p-6 rounded-xl space-y-4">
+              <h3 className="text-xs font-mono font-bold tracking-widest text-error uppercase border-b border-error/20 pb-2">
+                DANGER ZONE
+              </h3>
+              <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                Deleting your account will permanently purge all tracked holdings, past predictions, and cache records from our servers. This action is irreversible.
+              </p>
+
+              {deleteConfirm ? (
+                <div className="space-y-3 p-4 bg-error/10 border border-error/30 rounded font-mono">
+                  <div className="text-xs text-error font-bold">[WARNING] ARE YOU ABSOLUTELY SURE?</div>
+                  <div className="text-[10px] text-on-surface-variant leading-relaxed">
+                    All tracked data, portfolio settings, and terminal history will be completely erased.
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteLoading}
+                      className="flex-1 bg-error hover:bg-error/90 text-on-error font-bold py-2 rounded text-xs tracking-wider transition-colors cursor-pointer select-none"
+                    >
+                      {deleteLoading ? "DELETING..." : "YES, CONFIRM DELETE"}
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(false)}
+                      className="flex-1 bg-surface-container border border-outline-variant hover:bg-surface-container-high py-2 rounded text-xs text-on-surface transition-colors cursor-pointer select-none"
+                    >
+                      CANCEL
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setDeleteConfirm(true)}
+                  className="bg-transparent border border-error text-error hover:bg-error/10 font-bold py-2 px-4 rounded text-xs font-mono tracking-widest transition-all cursor-pointer"
+                >
+                  DELETE MY ACCOUNT
+                </button>
+              )}
             </div>
           </div>
         )}

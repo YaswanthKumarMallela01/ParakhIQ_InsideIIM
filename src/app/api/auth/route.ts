@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { sendOtpEmail } from "@/lib/email/send";
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServer();
-  const { action, email, password } = await request.json();
+  const { action, email, password, otp } = await request.json();
 
   try {
+    const adminSupabase = createSupabaseAdmin();
+
     if (action === "sign-in") {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -16,27 +19,121 @@ export async function POST(request: Request) {
       return NextResponse.json({ user: data.user });
     }
 
-    if (action === "sign-up") {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-      // Create default user preferences
-      if (data.user) {
-        const adminSupabase = createSupabaseAdmin();
-        await adminSupabase.from("user_preferences").insert({
-          user_id: data.user.id,
-          email_digest_enabled: true,
-        });
+    if (action === "send-otp") {
+      if (!email || !password) {
+        return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
       }
 
-      return NextResponse.json({ user: data.user });
+      // Check if user already exists in auth
+      const { data: usersList, error: listError } = await adminSupabase.auth.admin.listUsers();
+      if (listError) {
+        return NextResponse.json({ error: listError.message }, { status: 500 });
+      }
+
+      const emailExists = usersList.users.some(
+        (u) => u.email?.toLowerCase() === email.toLowerCase() && !u.email?.startsWith("guest_")
+      );
+
+      if (emailExists) {
+        return NextResponse.json({ error: "An account with this email already exists." }, { status: 400 });
+      }
+
+      // Generate a 6-digit OTP code
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // Upsert into temp_otps table
+      const { error: upsertError } = await adminSupabase.from("temp_otps").upsert({
+        email: email.toLowerCase(),
+        otp: otpCode,
+        password, // saved temporarily in plain text to register the user after OTP succeeds (row is immediately deleted)
+      });
+
+      if (upsertError) {
+        return NextResponse.json({ error: "Failed to store verification code." }, { status: 500 });
+      }
+
+      // Send the OTP via Gmail SMTP
+      const emailResult = await sendOtpEmail(email, otpCode);
+      if (!emailResult.success) {
+        return NextResponse.json({ error: "Failed to send OTP verification email. Please check configuration." }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, otpSent: true });
+    }
+
+    if (action === "verify-otp") {
+      if (!email || !otp) {
+        return NextResponse.json({ error: "Email and OTP are required" }, { status: 400 });
+      }
+
+      // Query the OTP row
+      const { data: tempOtp, error: queryError } = await adminSupabase
+        .from("temp_otps")
+        .select("*")
+        .eq("email", email.toLowerCase())
+        .maybeSingle();
+
+      if (queryError || !tempOtp) {
+        return NextResponse.json({ error: "Verification code expired or not requested." }, { status: 400 });
+      }
+
+      if (tempOtp.otp !== otp.trim()) {
+        return NextResponse.json({ error: "Incorrect verification code. Please try again." }, { status: 400 });
+      }
+
+      // OTP matches! Create the user account with automatic email confirmation
+      const { data: createdUser, error: createError } = await adminSupabase.auth.admin.createUser({
+        email: email.toLowerCase(),
+        password: tempOtp.password,
+        email_confirm: true,
+      });
+
+      if (createError) {
+        return NextResponse.json({ error: createError.message }, { status: 400 });
+      }
+
+      // Delete the OTP row
+      await adminSupabase.from("temp_otps").delete().eq("email", email.toLowerCase());
+
+      // Create default user preferences
+      await adminSupabase.from("user_preferences").insert({
+        user_id: createdUser.user.id,
+        email_digest_enabled: true,
+      });
+
+      // Sign the user in on the server client so that session cookies are set correctly
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase(),
+        password: tempOtp.password,
+      });
+
+      if (signInError) {
+        return NextResponse.json({ error: `Login failed: ${signInError.message}` }, { status: 400 });
+      }
+
+      return NextResponse.json({ user: signInData.user });
     }
 
     if (action === "sign-out") {
       await supabase.auth.signOut();
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === "delete-account") {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      // Delete user profile via Admin API
+      const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(user.id);
+      if (deleteError) {
+        return NextResponse.json({ error: deleteError.message }, { status: 500 });
+      }
+
+      // Sign out / clear session cookies
+      await supabase.auth.signOut();
+
       return NextResponse.json({ success: true });
     }
 
@@ -52,7 +149,6 @@ export async function POST(request: Request) {
         // Fallback: Create a mock user via the admin API
         console.log("Supabase anonymous sign-in failed, triggering admin user fallback:", anonError?.message);
 
-        const adminSupabase = createSupabaseAdmin();
         const randomId = Math.random().toString(36).substring(2, 10);
         const guestEmail = `guest_${randomId}@parakhiq.com`;
         const guestPassword = `GuestPass_${randomId}_123!`;
@@ -82,10 +178,8 @@ export async function POST(request: Request) {
       }
 
       if (user) {
-        const adminSupabase = createSupabaseAdmin();
-
         // 1. Create user preferences
-        await adminSupabase.from("user_preferences").insert({
+        await adminSupabase.from("user_preferences").upsert({
           user_id: user.id,
           email_digest_enabled: true,
         });
