@@ -1,4 +1,5 @@
-import yahooFinance from "yahoo-finance2";
+import YahooFinanceClass from "yahoo-finance2";
+const yahooFinance = new YahooFinanceClass({ suppressNotices: ["yahooSurvey"] });
 import { AgentState } from "../state";
 
 export async function resolveTickerNode(state: typeof AgentState.State) {
@@ -11,20 +12,24 @@ export async function resolveTickerNode(state: typeof AgentState.State) {
 
   // 1. Check if the query itself is a valid direct ticker (e.g. "NVDA", "RELIANCE.NS", "AAPL")
   const potentialTicker = query.toUpperCase().replace(/\s+/g, "");
-  try {
-    const directQuote = (await yahooFinance.quote(potentialTicker)) as any;
-    if (directQuote && directQuote.symbol) {
-      resolvedTicker = directQuote.symbol;
-      resolvedExchange = directQuote.exchange || (resolvedTicker.endsWith(".NS") ? "NSE" : resolvedTicker.endsWith(".BO") ? "BSE" : "GLOBAL");
-      logs.push(`Symbol "${resolvedTicker}" validated directly on ${resolvedExchange}.`);
-      return {
-        ticker: resolvedTicker,
-        exchange: resolvedExchange,
-        logs,
-      };
+  const isDirectTickerCandidate = query.includes(".") || query.length <= 5;
+  
+  if (isDirectTickerCandidate) {
+    try {
+      const directQuote = (await yahooFinance.quote(potentialTicker)) as any;
+      if (directQuote && directQuote.symbol) {
+        resolvedTicker = directQuote.symbol;
+        resolvedExchange = directQuote.exchange || (resolvedTicker.endsWith(".NS") ? "NSE" : resolvedTicker.endsWith(".BO") ? "BSE" : "GLOBAL");
+        logs.push(`Symbol "${resolvedTicker}" validated directly on ${resolvedExchange}.`);
+        return {
+          ticker: resolvedTicker,
+          exchange: resolvedExchange,
+          logs,
+        };
+      }
+    } catch (e) {
+      // Not a direct ticker, continue to search resolution
     }
-  } catch (e) {
-    // Not a direct ticker, continue to search resolution
   }
 
   // 2. Search Yahoo Finance for matching equity

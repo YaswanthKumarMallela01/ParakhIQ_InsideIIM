@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { Nav } from "@/components/nav";
 import { Disclaimer } from "@/components/disclaimer";
 import { ReasoningStepper } from "@/components/reasoning-stepper";
@@ -11,12 +13,21 @@ import { AddHoldingModal } from "@/components/add-holding-modal";
 import { ValuationChart } from "@/components/valuation-chart";
 
 export default function ResearchPage() {
+  const router = useRouter();
+  const supabase = createSupabaseBrowser();
+
   const [query, setQuery] = useState("");
   const [profile, setProfile] = useState<"conservative" | "aggressive">("aggressive");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentNode, setCurrentNode] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   // Analysis result states
   const [memo, setMemo] = useState<any>(null);
@@ -25,6 +36,7 @@ export default function ResearchPage() {
 
   // Research history state
   const [history, setHistory] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
 
   // Inline investment states
   const [investAmount, setInvestAmount] = useState("");
@@ -45,9 +57,63 @@ export default function ResearchPage() {
     }
   };
 
+  // Auth check using session cache to avoid page transition lag
   useEffect(() => {
-    fetchHistory();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        fetchHistory();
+      } else {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (!user) {
+            router.push("/");
+          } else {
+            setUser(user);
+            fetchHistory();
+          }
+        });
+      }
+    });
+  }, [supabase, router]);
+
+  // Click outside listener for autocomplete suggestions
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Fetch autocomplete suggestions with debouncing
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsResolving(true);
+      try {
+        const res = await fetch(`/api/research/resolve?query=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        setSuggestions(data.quotes || []);
+      } catch (err) {
+        console.error("Autocomplete fetch error:", err);
+      } finally {
+        setIsResolving(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [query]);
+
+  const handleSelectSuggestion = (quote: any) => {
+    setQuery(quote.symbol);
+    setShowSuggestions(false);
+  };
 
   const handleSelectHistoryItem = (item: any) => {
     setQuery(item.company_name);
@@ -74,6 +140,7 @@ export default function ResearchPage() {
     setExchange("");
     setInvestSuccessMsg(null);
     setInvestErrorMsg(null);
+    setShowSuggestions(false);
 
     try {
       const response = await fetch("/api/research", {
@@ -124,17 +191,16 @@ export default function ResearchPage() {
               if (eventData.memo) setMemo(eventData.memo);
             } else if (eventType === "done") {
               setCurrentNode("done");
-              setIsAnalyzing(false);
               fetchHistory(); // Refresh sidebar history
             } else if (eventType === "error") {
               setLogs((prev) => [...prev, `[ERROR] ${eventData.error}`]);
-              setIsAnalyzing(false);
             }
           }
         }
       }
     } catch (err: any) {
       setLogs((prev) => [...prev, `[CRITICAL ERROR] ${err.message || err}`]);
+    } finally {
       setIsAnalyzing(false);
     }
   };
@@ -197,35 +263,66 @@ export default function ResearchPage() {
               Indian-Market First Equity Thesis Engine & Critic
             </p>
           </div>
-          {/* Intake inputs form */}
-          {!isAnalyzing && currentNode !== "done" && (
-            <form onSubmit={handleStartAnalysis} className="w-full md:w-auto flex flex-col md:flex-row gap-3">
+          {/* Intake inputs form - always visible, fields disabled during active analysis */}
+          <form onSubmit={handleStartAnalysis} className="w-full md:w-auto flex flex-col md:flex-row gap-3 relative">
+            <div ref={searchContainerRef} className="relative flex-grow">
               <input
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
                 placeholder="e.g. Reliance or RELIANCE.NS"
                 required
-                className="bg-surface-container-lowest border border-outline-variant rounded px-3 py-2 text-xs font-mono text-on-surface focus:outline-none focus:border-primary min-w-[200px]"
+                disabled={isAnalyzing}
+                className="bg-surface-container-lowest border border-outline-variant rounded px-3 py-2 text-xs font-mono text-on-surface focus:outline-none focus:border-primary min-w-[220px] disabled:opacity-60"
               />
 
-              <select
-                value={profile}
-                onChange={(e) => setProfile(e.target.value as any)}
-                className="bg-surface-container-lowest border border-outline-variant rounded px-3 py-2 text-xs font-mono text-on-surface focus:outline-none focus:border-primary"
-              >
-                <option value="aggressive">AGGRESSIVE / SHORT-HORIZON</option>
-                <option value="conservative">CONSERVATIVE / LONG-HORIZON</option>
-              </select>
+              {/* Autocomplete Suggestions */}
+              {showSuggestions && suggestions.length > 0 && !isAnalyzing && (
+                <ul className="absolute z-50 left-0 top-full mt-1.5 w-full bg-surface-container-highest border border-outline-variant rounded max-h-48 overflow-y-auto shadow-xl">
+                  {suggestions.map((quote) => (
+                    <li
+                      key={quote.symbol}
+                      onClick={() => handleSelectSuggestion(quote)}
+                      className="p-2.5 text-[11px] font-mono border-b border-outline-variant/30 hover:bg-surface-container-low cursor-pointer flex justify-between items-center text-on-surface transition-colors"
+                    >
+                      <span className="font-semibold truncate max-w-[130px]">{quote.name}</span>
+                      <span className="text-secondary bg-secondary/10 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                        {quote.symbol}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-              <button
-                type="submit"
-                className="bg-primary text-on-primary font-bold px-5 py-2 rounded text-xs font-mono tracking-widest hover:bg-primary/95 transition-colors cursor-pointer"
-              >
-                RUN RESEARCH
-              </button>
-            </form>
-          )}
+              {isResolving && (
+                <div className="absolute right-3 top-2.5 text-[9px] font-mono text-primary animate-pulse">
+                  ...
+                </div>
+              )}
+            </div>
+
+            <select
+              value={profile}
+              onChange={(e) => setProfile(e.target.value as any)}
+              disabled={isAnalyzing}
+              className="bg-surface-container-lowest border border-outline-variant rounded px-3 py-2 text-xs font-mono text-on-surface focus:outline-none focus:border-primary disabled:opacity-60"
+            >
+              <option value="aggressive">AGGRESSIVE / SHORT-HORIZON</option>
+              <option value="conservative">CONSERVATIVE / LONG-HORIZON</option>
+            </select>
+
+            <button
+              type="submit"
+              disabled={isAnalyzing}
+              className="bg-primary text-on-primary font-bold px-5 py-2 rounded text-xs font-mono tracking-widest hover:bg-primary/95 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isAnalyzing ? "ANALYZING..." : "RUN RESEARCH"}
+            </button>
+          </form>
         </div>
 
         {/* Content Layout: 1/4 Left Sidebar for History, 3/4 Main Area */}
@@ -336,11 +433,11 @@ export default function ResearchPage() {
                 <div className="bg-surface-container border border-outline-variant p-6 rounded space-y-4">
                   <div className="flex flex-wrap justify-between items-center gap-3">
                     <div>
-                      <span className="text-[10px] font-mono bg-secondary/15 text-secondary border border-secondary/20 px-2 py-0.5 rounded uppercase mr-2 font-semibold">
+                      <span className="text-[10px] font-mono bg-secondary/15 text-secondary border border-secondary/20 px-2.5 py-0.5 rounded uppercase mr-2 font-bold select-all">
                         {ticker || "RELIANCE.NS"}
                       </span>
                       <span className="text-xs font-mono text-on-surface-variant">{exchange || "NSE"}</span>
-                      <h2 className="text-base font-hanken font-bold text-on-surface mt-1">
+                      <h2 className="text-base font-hanken font-bold text-on-surface mt-1.5">
                         {memo.companyName || query}
                       </h2>
                     </div>
@@ -473,19 +570,16 @@ export default function ResearchPage() {
                   <KPICard label="52W Low" value={memo.kpis.fiftyTwoWeekLow} subValue="Support" />
                 </div>
 
-                {/* Charts Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Price Chart */}
-                  {memo.priceData && memo.priceData.length > 0 && <PriceChart data={memo.priceData} />}
+                {/* Price History Line Chart */}
+                {memo.priceData && memo.priceData.length > 0 && <PriceChart data={memo.priceData} />}
 
-                  {/* Valuation Comparison Bar Chart */}
-                  <ValuationChart
-                    ticker={ticker}
-                    companyName={memo.companyName || query}
-                    peRatio={memo.kpis.peRatio}
-                    peSector={memo.kpis.peSectorRatio}
-                  />
-                </div>
+                {/* Valuation & Profitability Comparison Bar Charts */}
+                <ValuationChart
+                  ticker={ticker}
+                  companyName={memo.companyName || query}
+                  peRatio={memo.kpis.peRatio}
+                  peSector={memo.kpis.peSectorRatio}
+                />
 
                 {/* Detailed Thesis Bullet Points */}
                 <div className="bg-surface-container border border-outline-variant p-6 rounded space-y-4">

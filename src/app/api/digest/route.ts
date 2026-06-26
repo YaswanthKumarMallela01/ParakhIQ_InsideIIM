@@ -4,7 +4,8 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { calculateHoldingPrediction } from "@/lib/agent/prediction";
 import { sendDigestEmail } from "@/lib/email/send";
 import { DigestEmailHolding } from "@/lib/email/templates";
-import yahooFinance from "yahoo-finance2";
+import YahooFinanceClass from "yahoo-finance2";
+const yahooFinance = new YahooFinanceClass({ suppressNotices: ["yahooSurvey"] });
 
 export const dynamic = "force-dynamic";
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import yahooFinance from "yahoo-finance2";
+import YahooFinanceClass from "yahoo-finance2";
+const yahooFinance = new YahooFinanceClass({ suppressNotices: ["yahooSurvey"] });
 
 export async function GET(request: NextRequest) {
   try {

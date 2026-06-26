@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { calculateHoldingPrediction } from "@/lib/agent/prediction";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import yahooFinance from "yahoo-finance2";
+import YahooFinanceClass from "yahoo-finance2";
+const yahooFinance = new YahooFinanceClass({ suppressNotices: ["yahooSurvey"] });
 
 export const dynamic = "force-dynamic";
 

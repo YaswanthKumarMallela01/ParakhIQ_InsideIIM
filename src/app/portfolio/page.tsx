@@ -36,12 +36,19 @@ export default function PortfolioPage() {
   };
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        router.push("/");
-      } else {
-        setUser(user);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
         fetchHoldings();
+      } else {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (!user) {
+            router.push("/");
+          } else {
+            setUser(user);
+            fetchHoldings();
+          }
+        });
       }
     });
   }, [supabase, router]);

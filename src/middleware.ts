@@ -25,8 +25,20 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session if expired
-  await supabase.auth.getUser();
+  // Refresh session if not a prefetch and has session cookie
+  const isPrefetch = 
+    request.headers.get("purpose") === "prefetch" || 
+    request.headers.get("x-middleware-prefetch") === "true";
+  
+  const hasSessionCookie = request.cookies.getAll().some(c => c.name.startsWith("sb-"));
+
+  if (!isPrefetch && hasSessionCookie) {
+    try {
+      await supabase.auth.getUser();
+    } catch (e) {
+      // Ignore
+    }
+  }
 
   return supabaseResponse;
 }

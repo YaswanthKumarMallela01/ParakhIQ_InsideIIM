@@ -1,4 +1,5 @@
-import yahooFinance from "yahoo-finance2";
+import YahooFinanceClass from "yahoo-finance2";
+const yahooFinance = new YahooFinanceClass({ suppressNotices: ["yahooSurvey"] });
 import { tavily } from "@tavily/core";
 import { AgentState, PricePoint, NewsArticle, Fundamentals } from "../state";
 

@@ -48,12 +48,19 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        router.push("/");
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        fetchSettings(session.user);
       } else {
-        setUser(user);
-        fetchSettings(user);
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (!user) {
+            router.push("/");
+          } else {
+            setUser(user);
+            fetchSettings(user);
+          }
+        });
       }
     });
   }, [supabase, router]);
