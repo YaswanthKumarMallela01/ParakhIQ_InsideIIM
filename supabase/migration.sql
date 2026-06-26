@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS public.holdings (
   company TEXT NOT NULL,
   ticker TEXT NOT NULL,
   amount_invested NUMERIC NOT NULL,
+  purchase_price NUMERIC,
   added_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 

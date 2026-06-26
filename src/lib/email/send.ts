@@ -23,7 +23,7 @@ export async function sendDigestEmail(
     },
   });
 
-  const html = getDigestEmailHtml(userName, holdings, appUrl);
+  const html = getDigestEmailHtml(userName, toEmail, holdings, appUrl);
 
   try {
     const info = await transporter.sendMail({

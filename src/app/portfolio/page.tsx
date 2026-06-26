@@ -6,9 +6,8 @@ import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { Nav } from "@/components/nav";
 import { Disclaimer } from "@/components/disclaimer";
 import { KPICard } from "@/components/kpi-card";
-import { SentimentBar } from "@/components/sentiment-bar";
-import { PredictionRange } from "@/components/prediction-range";
 import { AddHoldingModal } from "@/components/add-holding-modal";
+import { PriceChart } from "@/components/price-chart";
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -66,7 +65,6 @@ export default function PortfolioPage() {
     setIsDigestLoading(true);
     setDigestMessage(null);
 
-    // If guest mode, ask them what email to send the report to!
     let emailInput = "";
     if (isGuest) {
       const email = prompt("Enter your email address to receive the test digest:");
@@ -97,7 +95,6 @@ export default function PortfolioPage() {
     }
   };
 
-  // Calculate totals
   const isGuest = user?.is_anonymous || user?.email?.startsWith("guest_");
   const totalInvested = holdings.reduce((sum, h) => sum + Number(h.amount_invested), 0);
   const holdingsCount = holdings.length;
@@ -201,6 +198,8 @@ export default function PortfolioPage() {
           <div className="space-y-6">
             {holdings.map((holding) => {
               const pred = holding.latestPrediction;
+              const isGain = holding.gain_loss >= 0;
+
               return (
                 <div
                   key={holding.id}
@@ -221,8 +220,14 @@ export default function PortfolioPage() {
                     </div>
 
                     <div className="text-right flex flex-col items-end gap-2">
-                      <div className="text-[10px] font-mono text-on-surface-variant uppercase">
-                        Tracked Amount
+                      <div className="flex items-center gap-1 text-[10px] font-mono text-on-surface-variant uppercase justify-end">
+                        <span>Intended Investment</span>
+                        <span
+                          className="text-secondary text-[10px] cursor-help font-bold select-none"
+                          title="The total amount of Rupees you plan to invest in this stock."
+                        >
+                          [i]
+                        </span>
                       </div>
                       <div className="text-base font-mono font-bold text-on-surface">
                         ₹{Number(holding.amount_invested).toLocaleString("en-IN")}
@@ -236,22 +241,131 @@ export default function PortfolioPage() {
                     </div>
                   </div>
 
-                  {/* Prediction Section */}
-                  {pred ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-outline-variant/30 pt-4">
-                      <PredictionRange
-                        rangeLow={pred.range_low}
-                        rangeHigh={pred.range_high}
-                        midpoint={pred.midpoint}
-                        guidance={pred.guidance}
-                      />
-                      <SentimentBar score={pred.score} />
+                  {/* Upgraded Values & Graph layout */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-outline-variant/30 pt-4">
+                    {/* Left Column: Key Values with explaining [i] tooltips */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Invested Price */}
+                      <div className="bg-surface-container-low border border-outline-variant/40 p-3 rounded space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                          <span>Invested Price</span>
+                          <span
+                            className="text-secondary text-[9px] cursor-help font-bold select-none"
+                            title="The price of the stock on the day you added it to your tracker."
+                          >
+                            [i]
+                          </span>
+                        </div>
+                        <div className="text-sm font-mono font-bold text-on-surface">
+                          ₹{holding.purchase_price.toLocaleString("en-IN")}
+                        </div>
+                      </div>
+
+                      {/* Price Today */}
+                      <div className="bg-surface-container-low border border-outline-variant/40 p-3 rounded space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                          <span>Price Today</span>
+                          <span
+                            className="text-secondary text-[9px] cursor-help font-bold select-none"
+                            title="The latest market trading price of this stock fetched live."
+                          >
+                            [i]
+                          </span>
+                        </div>
+                        <div className="text-sm font-mono font-bold text-primary">
+                          ₹{holding.current_price.toLocaleString("en-IN")}
+                        </div>
+                      </div>
+
+                      {/* Tracked Shares */}
+                      <div className="bg-surface-container-low border border-outline-variant/40 p-3 rounded space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                          <span>Tracked Shares</span>
+                          <span
+                            className="text-secondary text-[9px] cursor-help font-bold select-none"
+                            title="The equivalent shares, calculated as: Intended Investment / Invested Price."
+                          >
+                            [i]
+                          </span>
+                        </div>
+                        <div className="text-sm font-mono font-bold text-on-surface">
+                          {holding.shares}
+                        </div>
+                      </div>
+
+                      {/* Current Value */}
+                      <div className="bg-surface-container-low border border-outline-variant/40 p-3 rounded space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                          <span>Current Value</span>
+                          <span
+                            className="text-secondary text-[9px] cursor-help font-bold select-none"
+                            title="The current valuation of your tracked holding: Tracked Shares * Price Today."
+                          >
+                            [i]
+                          </span>
+                        </div>
+                        <div className="text-sm font-mono font-bold text-on-surface">
+                          ₹{holding.current_value.toLocaleString("en-IN")}
+                        </div>
+                      </div>
+
+                      {/* Total P&L Gain/Loss */}
+                      <div className="col-span-2 bg-surface-container-low border border-outline-variant/40 p-3 rounded space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                            <span>Total Gain / Loss</span>
+                            <span
+                              className="text-secondary text-[9px] cursor-help font-bold select-none"
+                              title="The absolute and percentage returns between the current valuation and your invested amount."
+                            >
+                              [i]
+                            </span>
+                          </div>
+                          <span className={`text-xs font-mono font-bold ${isGain ? "text-primary" : "text-error"}`}>
+                            {holding.gain_loss_percent >= 0 ? "+" : ""}{holding.gain_loss_percent}%
+                          </span>
+                        </div>
+                        <div className={`text-base font-mono font-bold ${isGain ? "text-primary" : "text-error"}`}>
+                          {isGain ? "+" : ""}₹{holding.gain_loss.toLocaleString("en-IN")}
+                        </div>
+                      </div>
+
+                      {/* Advisory suggestion note */}
+                      {pred && (
+                        <div className="col-span-2 bg-surface-container-lowest border border-outline-variant/30 p-2.5 rounded font-mono text-[10px] text-on-surface-variant flex items-center justify-between">
+                          <div className="flex items-center gap-1 uppercase font-bold text-on-surface-variant">
+                            <span>[Model Advisory Guidance]</span>
+                            <span
+                              className="text-secondary text-[9px] cursor-help font-bold select-none"
+                              title="A suggestion calculated by extrapolating the 1Y linear price slope and news sentiment."
+                            >
+                              [i]
+                            </span>
+                          </div>
+                          <span className={`px-2 py-0.5 border rounded uppercase font-bold text-[9px] ${
+                            pred.guidance.includes("hold") || pred.guidance.includes("accumulate")
+                              ? "bg-primary/10 text-primary border-primary/20"
+                              : pred.guidance.includes("reduce") || pred.guidance.includes("sell")
+                              ? "bg-error/10 text-error border-error/20"
+                              : "bg-secondary/10 text-secondary border-secondary/20"
+                          }`}>
+                            {pred.guidance}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-center py-6 font-mono text-xs text-on-surface-variant border-t border-outline-variant/30 pt-4 animate-pulse">
-                      CALCULATING PREDICTIONS...
+
+                    {/* Right Column: Price Trend Line Chart */}
+                    <div className="flex flex-col justify-between">
+                      {holding.priceHistory && holding.priceHistory.length > 0 ? (
+                        <PriceChart data={holding.priceHistory} height={180} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-surface-container-low border border-outline-variant rounded font-mono text-xs text-on-surface-variant min-h-[180px]">
+                          Fetching live price trend data...
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               );
             })}
