@@ -41,11 +41,46 @@ export async function POST(request: Request) {
     }
 
     if (action === "guest") {
-      // Sign in anonymously
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      let user: any = null;
 
-      const user = data.user;
+      // Try native anonymous sign-in first
+      const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+
+      if (!anonError && anonData?.user) {
+        user = anonData.user;
+      } else {
+        // Fallback: Create a mock user via the admin API
+        console.log("Supabase anonymous sign-in failed, triggering admin user fallback:", anonError?.message);
+
+        const adminSupabase = createSupabaseAdmin();
+        const randomId = Math.random().toString(36).substring(2, 10);
+        const guestEmail = `guest_${randomId}@parakhiq.com`;
+        const guestPassword = `GuestPass_${randomId}_123!`;
+
+        const { data: createdUserData, error: createError } = await adminSupabase.auth.admin.createUser({
+          email: guestEmail,
+          password: guestPassword,
+          email_confirm: true,
+          user_metadata: { is_anonymous: true }
+        });
+
+        if (createError) {
+          return NextResponse.json({ error: `Guest session creation failed: ${createError.message}` }, { status: 400 });
+        }
+
+        // Now sign them in via server client to set session cookies
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: guestEmail,
+          password: guestPassword,
+        });
+
+        if (signInError) {
+          return NextResponse.json({ error: `Guest session login failed: ${signInError.message}` }, { status: 400 });
+        }
+
+        user = signInData.user;
+      }
+
       if (user) {
         const adminSupabase = createSupabaseAdmin();
 

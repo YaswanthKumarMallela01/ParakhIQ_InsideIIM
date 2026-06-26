@@ -68,7 +68,7 @@ export default function PortfolioPage() {
 
     // If guest mode, ask them what email to send the report to!
     let emailInput = "";
-    if (user?.is_anonymous) {
+    if (isGuest) {
       const email = prompt("Enter your email address to receive the test digest:");
       if (!email) {
         setIsDigestLoading(false);
@@ -98,6 +98,7 @@ export default function PortfolioPage() {
   };
 
   // Calculate totals
+  const isGuest = user?.is_anonymous || user?.email?.startsWith("guest_");
   const totalInvested = holdings.reduce((sum, h) => sum + Number(h.amount_invested), 0);
   const holdingsCount = holdings.length;
 
@@ -108,7 +109,7 @@ export default function PortfolioPage() {
 
       <main className="flex-grow max-w-6xl w-full mx-auto p-4 md:p-6 space-y-6">
         {/* Guest Warning Banner if Guest Mode */}
-        {user?.is_anonymous && (
+        {isGuest && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-widest">
@@ -178,8 +179,8 @@ export default function PortfolioPage() {
           />
           <KPICard
             label="Daily Email Digest"
-            value={user?.is_anonymous ? "DISABLED" : "ENABLED"}
-            subValue={user?.is_anonymous ? "GUEST SESSIONS RUN ON-DEMAND ONLY" : "DAILY AT ~7:30 AM IST"}
+            value={isGuest ? "DISABLED" : "ENABLED"}
+            subValue={isGuest ? "GUEST SESSIONS RUN ON-DEMAND ONLY" : "DAILY AT ~7:30 AM IST"}
           />
         </div>
 

@@ -54,8 +54,10 @@ export default function SettingsPage() {
     });
   }, [supabase, router]);
 
+  const isGuest = user?.is_anonymous || user?.email?.startsWith("guest_");
+
   const handleToggleDigest = async (val: boolean) => {
-    if (user?.is_anonymous) {
+    if (isGuest) {
       alert("Email digests are disabled in Guest Mode. Please sign up to enable this feature.");
       return;
     }
@@ -139,7 +141,7 @@ export default function SettingsPage() {
         ) : (
           <div className="space-y-6">
             {/* Guest Banner if Anonymous */}
-            {user?.is_anonymous && (
+            {isGuest && (
               <div className="bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-xl space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-widest">
@@ -205,18 +207,18 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`text-[9px] font-mono font-bold border px-2 py-0.5 rounded ${
-                      emailDigestEnabled && !user?.is_anonymous
+                      emailDigestEnabled && !isGuest
                         ? "text-primary border-primary bg-primary/10"
                         : "text-on-surface-variant border-outline-variant"
                     }`}
                   >
-                    {emailDigestEnabled && !user?.is_anonymous ? "ENABLED" : "DISABLED"}
+                    {emailDigestEnabled && !isGuest ? "ENABLED" : "DISABLED"}
                   </span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={emailDigestEnabled && !user?.is_anonymous}
-                      disabled={user?.is_anonymous}
+                      checked={emailDigestEnabled && !isGuest}
+                      disabled={isGuest}
                       onChange={(e) => handleToggleDigest(e.target.checked)}
                       className="sr-only peer"
                     />
@@ -282,13 +284,13 @@ export default function SettingsPage() {
               <div className="space-y-2 text-xs font-mono">
                 <div className="flex justify-between py-1 border-b border-outline-variant/20">
                   <span className="text-on-surface-variant">User Type:</span>
-                  <span className="text-on-surface">{user?.is_anonymous ? "GUEST SESSION" : "REGISTERED ACCOUNT"}</span>
+                  <span className="text-on-surface">{isGuest ? "GUEST SESSION" : "REGISTERED ACCOUNT"}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-outline-variant/20">
                   <span className="text-on-surface-variant">Account ID:</span>
                   <span className="text-on-surface select-all truncate max-w-[200px]">{user?.id}</span>
                 </div>
-                {!user?.is_anonymous && (
+                {!isGuest && (
                   <div className="flex justify-between py-1 border-b border-outline-variant/20">
                     <span className="text-on-surface-variant">Email Address:</span>
                     <span className="text-on-surface">{user?.email}</span>

@@ -47,7 +47,8 @@ export async function GET(request: NextRequest) {
 
     const emailMap: Record<string, string> = {};
     usersData.users.forEach((u) => {
-      if (u.email && !u.is_anonymous) {
+      const isFallbackGuest = u.email?.startsWith("guest_");
+      if (u.email && !u.is_anonymous && !isFallbackGuest) {
         // Only email registered users, skip anonymous guest sessions
         emailMap[u.id] = u.email;
       }

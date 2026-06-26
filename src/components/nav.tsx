@@ -76,19 +76,22 @@ export function Nav() {
         </div>
 
         <div className="flex items-center gap-4">
-          {user && (
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-mono text-on-surface-variant bg-surface-container py-1 px-2.5 rounded border border-outline-variant">
-                {user.is_anonymous ? "GUEST MODE" : user.email?.split("@")[0].toUpperCase()}
-              </span>
-              <button
-                onClick={handleSignOut}
-                className="text-xs font-mono text-error hover:underline bg-transparent border-0 cursor-pointer"
-              >
-                {user.is_anonymous ? "END SESSION" : "SIGN OUT"}
-              </button>
-            </div>
-          )}
+          {user && (() => {
+            const isGuest = user.is_anonymous || user.email?.startsWith("guest_");
+            return (
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-mono text-on-surface-variant bg-surface-container py-1 px-2.5 rounded border border-outline-variant">
+                  {isGuest ? "GUEST MODE" : user.email?.split("@")[0].toUpperCase()}
+                </span>
+                <button
+                  onClick={handleSignOut}
+                  className="text-xs font-mono text-error hover:underline bg-transparent border-0 cursor-pointer"
+                >
+                  {isGuest ? "END SESSION" : "SIGN OUT"}
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
       {/* Mobile nav bar at the bottom */}
