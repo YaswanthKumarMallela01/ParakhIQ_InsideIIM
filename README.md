@@ -1,7 +1,7 @@
 # ParakhIQ — AI Equity Research Terminal
 
 > **Project Links**:
-> - 👉 **[View Example Runs & Outputs Document](https://drive.google.com/file/d/1cj5msaRq2aT-QdcC9sZjh4HJesu9n3J6/view?usp=sharing)**
+> - 👉 **[View Example Runs & Outputs Document](https://drive.google.com/file/d/1E_nwM-93n-Y_aQ0YD8lm9PKiRspWT61h/view?usp=sharing)**
 > - 👉 **[View LLM Chat Session Transcripts & Logs](https://drive.google.com/file/d/1ZE_Aj0WZg1t4CjInnU5H8lM6DoWD70LL/view?usp=sharing)**
 
 ---
@@ -117,7 +117,7 @@ For portfolio holdings, predictions are computed as a **range** with a **midpoin
 
 You can find the detailed outputs, screenshots, and visual walkthroughs of the agent's research runs on several companies (including Reliance, Microsoft, and TCS) at the link below:
 
-👉 **[View Example Runs Document](https://drive.google.com/file/d/1cj5msaRq2aT-QdcC9sZjh4HJesu9n3J6/view?usp=sharing)**
+👉 **[View Example Runs Document](https://drive.google.com/file/d/1E_nwM-93n-Y_aQ0YD8lm9PKiRspWT61h/view?usp=sharing)**
 
 ---
 
