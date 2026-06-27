@@ -1,6 +1,8 @@
 # ParakhIQ — AI Equity Research Terminal
 
 > **Project Links**:
+> - 🌐 **[Live Deployed Terminal](https://parakh-iq-inside-iim-git-master-yashvivobook-1977s-projects.vercel.app/)**
+> - 💻 **[GitHub Repository](https://github.com/YaswanthKumarMallela01/ParakhIQ_InsideIIM)**
 > - 👉 **[View Example Runs & Outputs Document](https://drive.google.com/file/d/1E_nwM-93n-Y_aQ0YD8lm9PKiRspWT61h/view?usp=sharing)**
 > - 👉 **[View LLM Chat Session Transcripts & Logs](https://drive.google.com/file/d/1ZE_Aj0WZg1t4CjInnU5H8lM6DoWD70LL/view?usp=sharing)**
 
@@ -24,6 +26,13 @@ ParakhIQ acts as an automated equity analyst that delivers terminal-grade financ
 ---
 
 ## How to run it — setup and run steps (plus any keys/ env needed)
+
+> [!IMPORTANT]
+> **💡 RECOMMENDED: Try Guest Mode First!**
+> Setting up full auth, database, and SMTP keys takes a bit of time. For the easiest and fastest review experience:
+> 1. Visit the **[Live Deployed Terminal](https://parakh-iq-inside-iim-git-master-yashvivobook-1977s-projects.vercel.app/)**.
+> 2. Click the **"ENTER AS GUEST"** button on the landing page.
+> 3. This immediately logs you in using Supabase anonymous authentication and automatically seeds your session with mock portfolio holdings (Reliance, TCS, HDFC Bank) and terminal research history. You can start searching, checking diagnostics, and creating research reports immediately.
 
 ### 1. Prerequisites
 - **Node.js** 18+ installed on your system.
