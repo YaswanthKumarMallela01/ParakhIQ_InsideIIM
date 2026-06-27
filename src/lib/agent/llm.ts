@@ -34,7 +34,7 @@ export async function callLlm(
 ): Promise<{ content: string; source: "gemini" | "groq" }> {
   try {
     const model = new ChatGoogleGenerativeAI({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
       temperature,
     });
@@ -88,7 +88,7 @@ export async function callLlmStructured<T>(
 ): Promise<{ data: T; source: "gemini" | "groq" }> {
   try {
     const model = new ChatGoogleGenerativeAI({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
       temperature,
     });

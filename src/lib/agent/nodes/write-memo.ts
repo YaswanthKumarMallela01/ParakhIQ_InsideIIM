@@ -7,13 +7,13 @@ const memoSchema = z.object({
   thesisPoints: z.array(z.string()).min(3).max(5).describe("3-5 core bullet points of the investment thesis, supported by numerical data where possible."),
   keyRisks: z.array(z.string()).min(3).max(5).describe("3-5 key operational, financial, or market risks associated with the holding."),
   kpis: z.object({
-    peRatio: z.string().describe("Company P/E ratio, e.g. '28.5' or 'unavailable'"),
-    peSectorRatio: z.string().describe("Sector P/E ratio, e.g. '24.1' or 'unavailable'"),
-    marketCap: z.string().describe("Market Cap formatted with Indian numbering, e.g. '₹19.2L Cr' or '₹52,000 Cr' or 'unavailable'"),
-    fiftyTwoWeekHigh: z.string().describe("52W High formatted, e.g. '₹3,024.90' or 'unavailable'"),
-    fiftyTwoWeekLow: z.string().describe("52W Low formatted, e.g. '₹2,220.30' or 'unavailable'"),
-    promoterHolding: z.string().describe("Promoter shareholding with QoQ trend if found, e.g. '50.49% (↑ 0.12% QoQ)' or '50.49%' or 'unavailable'"),
-    debtToEquity: z.string().describe("Debt-to-equity ratio, e.g. '0.42' or 'unavailable'"),
+    peRatio: z.coerce.string().describe("Company P/E ratio, e.g. '28.5' or 'unavailable'"),
+    peSectorRatio: z.coerce.string().describe("Sector P/E ratio, e.g. '24.1' or 'unavailable'"),
+    marketCap: z.coerce.string().describe("Market Cap formatted with currency, e.g. '₹19.2L Cr' or '$2.77T' or 'unavailable'"),
+    fiftyTwoWeekHigh: z.coerce.string().describe("52W High formatted, e.g. '₹3,024.90' or '$120.50' or 'unavailable'"),
+    fiftyTwoWeekLow: z.coerce.string().describe("52W Low formatted, e.g. '₹2,220.30' or '$90.20' or 'unavailable'"),
+    promoterHolding: z.coerce.string().describe("Promoter shareholding with QoQ trend if found, e.g. '50.49% (↑ 0.12% QoQ)' or '50.49%' or 'unavailable'"),
+    debtToEquity: z.coerce.string().describe("Debt-to-equity ratio, e.g. '0.42' or 'unavailable'"),
   }),
 });
 
@@ -26,14 +26,22 @@ const cleanText = (text: string) => {
     .trim();
 };
 
-function formatMarketCap(mc: any): string {
+function formatMarketCap(mc: any, currencySymbol: string = "₹"): string {
   if (!mc || mc === "unavailable") return "unavailable";
   const num = Number(mc);
   if (isNaN(num)) return String(mc);
-  if (num >= 1e12) return `₹${(num / 1e12).toFixed(2)}T`;
-  if (num >= 1e7) return `₹${(num / 1e7).toFixed(2)} Cr`;
-  if (num >= 1e5) return `₹${(num / 1e5).toFixed(2)}L`;
-  return `₹${num.toLocaleString("en-IN")}`;
+  
+  if (currencySymbol === "$") {
+    if (num >= 1e12) return `$${(num / 1e12).toFixed(2)}T`;
+    if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
+    if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
+    return `$${num.toLocaleString("en-US")}`;
+  } else {
+    if (num >= 1e12) return `${currencySymbol}${(num / 1e12).toFixed(2)}T`;
+    if (num >= 1e7) return `${currencySymbol}${(num / 1e7).toFixed(2)} Cr`;
+    if (num >= 1e5) return `${currencySymbol}${(num / 1e5).toFixed(2)}L`;
+    return `${currencySymbol}${num.toLocaleString("en-IN")}`;
+  }
 }
 
 function formatPercentage(p: any): string {
@@ -87,13 +95,13 @@ ${state.thesis}
 
 Your task:
 1. Synthesize the final thesis and risks into structured bullet points.
-2. Format the KPIs correctly. Convert Market Cap from raw bytes/numbers into Indian formats like "L Cr" or "Cr" (e.g. 19200000000000 -> "₹19.2L Cr").
+2. Format the KPIs correctly. If Indian stock, format Market Cap into Indian numbering (e.g. 19200000000000 -> "₹19.2L Cr"). If US stock, use standard formatting (e.g. "$2.77T"). Use the provided currency symbol.
 3. Search the context for "sector P/E" and promoter shareholding trend details. If you find a trend (e.g. increase/decrease by X%), format it as 'X% (↑ Y% QoQ)'. If no trend or sector PE is found in the search context, mark it as 'unavailable'.
 4. Write a concise executive summary.
 `;
 
   const formattedCurrentPrice = state.fundamentals.currentPrice !== undefined && state.fundamentals.currentPrice !== "unavailable"
-    ? `${currencySymbol}${Number(state.fundamentals.currentPrice).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ? `${currencySymbol}${Number(state.fundamentals.currentPrice).toLocaleString(currencySymbol === "$" ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : "unavailable";
 
   try {
@@ -162,10 +170,10 @@ Your task:
     }
 
     const fmtHigh = state.fundamentals.fiftyTwoWeekHigh !== "unavailable"
-      ? `${currencySymbol}${Number(state.fundamentals.fiftyTwoWeekHigh).toLocaleString("en-IN")}`
+      ? `${currencySymbol}${Number(state.fundamentals.fiftyTwoWeekHigh).toLocaleString(currencySymbol === "$" ? "en-US" : "en-IN")}`
       : "unavailable";
     const fmtLow = state.fundamentals.fiftyTwoWeekLow !== "unavailable"
-      ? `${currencySymbol}${Number(state.fundamentals.fiftyTwoWeekLow).toLocaleString("en-IN")}`
+      ? `${currencySymbol}${Number(state.fundamentals.fiftyTwoWeekLow).toLocaleString(currencySymbol === "$" ? "en-US" : "en-IN")}`
       : "unavailable";
 
     const fallbackMemo: FinalMemo = {
@@ -180,7 +188,7 @@ Your task:
       kpis: {
         peRatio: formatDecimal(rawPe),
         peSectorRatio: "unavailable",
-        marketCap: formatMarketCap(rawMarketCap),
+        marketCap: formatMarketCap(rawMarketCap, currencySymbol),
         fiftyTwoWeekHigh: fmtHigh,
         fiftyTwoWeekLow: fmtLow,
         promoterHolding: formatPercentage(rawPromoter),

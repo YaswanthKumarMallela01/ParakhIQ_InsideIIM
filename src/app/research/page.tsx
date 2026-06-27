@@ -248,6 +248,18 @@ export default function ResearchPage() {
     }
   };
 
+  const handleDeleteHistoryItem = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/research/history?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setHistory((prev) => prev.filter((item) => item.id !== id));
+      }
+    } catch (err) {
+      console.error("Failed to delete history item:", err);
+    }
+  };
+
   const handleInlineInvest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!memo || !investAmount) return;
@@ -402,37 +414,49 @@ export default function ResearchPage() {
             ) : (
               <div className="space-y-2">
                 {history.map((run) => (
-                  <button
-                    key={run.id}
-                    onClick={() => handleSelectHistoryItem(run)}
-                    className="w-full text-left bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/60 hover:border-outline p-2.5 rounded font-mono text-xs transition-all flex flex-col gap-1 cursor-pointer group"
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-on-surface group-hover:text-primary truncate max-w-[120px]">
-                        {run.ticker}
-                      </span>
-                      <span
-                        className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-bold ${
-                          run.verdict.toLowerCase() === "invest"
-                            ? "bg-primary/10 text-primary border border-primary/20"
-                            : "bg-error/10 text-error border border-error/20"
-                        }`}
-                      >
-                        {run.verdict}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-on-surface-variant truncate">
-                      {run.company_name}
-                    </div>
-                    <div className="text-[8px] text-on-surface-variant/70 text-right pt-1 mt-1 border-t border-outline-variant/10">
-                      {new Date(run.created_at).toLocaleDateString("en-IN", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </button>
+                  <div key={run.id} className="relative group w-full">
+                    <button
+                      onClick={() => handleSelectHistoryItem(run)}
+                      className="w-full text-left bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/60 hover:border-outline p-2.5 rounded font-mono text-xs transition-all flex flex-col gap-1 cursor-pointer"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-on-surface group-hover:text-primary truncate max-w-[100px]">
+                          {run.ticker}
+                        </span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-bold ${
+                            run.verdict.toLowerCase() === "invest"
+                              ? "bg-primary/10 text-primary border border-primary/20"
+                              : "bg-error/10 text-error border border-error/20"
+                          }`}
+                        >
+                          {run.verdict}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-on-surface-variant truncate pr-6">
+                        {run.company_name}
+                      </div>
+                      <div className="text-[8px] text-on-surface-variant/70 text-right pt-1 mt-1 border-t border-outline-variant/10">
+                        {new Date(run.created_at).toLocaleDateString("en-IN", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteHistoryItem(e, run.id)}
+                      title="Delete from history"
+                      className="absolute bottom-1.5 left-2 p-1 text-on-surface-variant/50 hover:text-error hover:bg-error/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -637,7 +661,7 @@ export default function ResearchPage() {
                 </div>
 
                 {/* Price History Line Chart */}
-                {memo.priceData && memo.priceData.length > 0 && <PriceChart data={memo.priceData} />}
+                {memo.priceData && memo.priceData.length > 0 && <PriceChart data={memo.priceData} currencySymbol={memo.kpis.currentPrice?.includes("$") || memo.kpis.marketCap?.includes("$") ? "$" : "₹"} />}
 
                 {/* Valuation & Profitability Comparison Bar Charts */}
                 <ValuationChart

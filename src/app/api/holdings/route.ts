@@ -161,7 +161,6 @@ export async function POST(request: Request) {
         company,
         ticker,
         amount_invested: Number(amountInvested),
-        purchase_price: purchasePrice,
       })
       .select()
       .single();

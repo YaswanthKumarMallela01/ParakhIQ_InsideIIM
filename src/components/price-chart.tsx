@@ -19,9 +19,10 @@ interface PricePoint {
 interface PriceChartProps {
   data: PricePoint[];
   height?: number;
+  currencySymbol?: string;
 }
 
-export function PriceChart({ data, height = 240 }: PriceChartProps) {
+export function PriceChart({ data, height = 240, currencySymbol = "₹" }: PriceChartProps) {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export function PriceChart({ data, height = 240 }: PriceChartProps) {
     <div className="w-full bg-surface-container border border-outline-variant p-4 rounded">
       <div className="flex items-center justify-between mb-4">
         <span className="text-[10px] font-mono font-bold tracking-widest text-on-surface-variant uppercase">
-          1-Year Price History (INR)
+          1-Year Price History ({currencySymbol === "$" ? "USD" : "INR"})
         </span>
         <span className="text-[10px] font-mono text-primary font-bold">
           LIVE CHART
@@ -94,7 +95,7 @@ export function PriceChart({ data, height = 240 }: PriceChartProps) {
               tickLine={false}
               axisLine={false}
               dx={-5}
-              tickFormatter={(v) => `₹${v.toLocaleString("en-IN")}`}
+              tickFormatter={(v) => `${currencySymbol}${v.toLocaleString(currencySymbol === "$" ? "en-US" : "en-IN")}`}
             />
             <Tooltip
               contentStyle={{
@@ -105,7 +106,7 @@ export function PriceChart({ data, height = 240 }: PriceChartProps) {
                 fontSize: "11px",
                 color: "#e5e1e4",
               }}
-              formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, "Price"]}
+              formatter={(value: any) => [`${currencySymbol}${Number(value).toFixed(2)}`, "Price"]}
               labelFormatter={(label) => `Date: ${label}`}
             />
             <Area
