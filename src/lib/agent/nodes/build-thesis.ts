@@ -1,13 +1,7 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { AgentState } from "../state";
+import { callLlm } from "../llm";
 
 export async function buildThesisNode(state: typeof AgentState.State) {
-  const model = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
-    temperature: 0.4,
-  });
-
   const isRevision = state.loopCount > 0;
   const logs: string[] = [];
 
@@ -77,19 +71,15 @@ Provide deep numerical and reasoning support.
   }
 
   try {
-    const response = await model.invoke([
-      ["system", systemPrompt],
-      ["human", userPrompt],
-    ]);
-
-    const thesisOutput = response.content as string;
+    const response = await callLlm(systemPrompt, userPrompt, 0.4);
+    const thesisOutput = response.content;
 
     return {
       thesis: thesisOutput,
       logs: logs.concat([
         isRevision
-          ? `Revised thesis successfully generated.`
-          : `Initial thesis generated.`
+          ? `Revised thesis successfully generated (${response.source}).`
+          : `Initial thesis generated (${response.source}).`
       ]),
     };
   } catch (error: any) {

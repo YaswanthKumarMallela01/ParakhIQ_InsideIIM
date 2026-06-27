@@ -95,7 +95,20 @@ export async function gatherDataNode(state: typeof AgentState.State) {
       } else if (s.defaultKeyStatistics?.heldPercentInsiders) {
         fundamentals.promoterHolding = s.defaultKeyStatistics.heldPercentInsiders * 100;
       }
-      logs.push(`Yahoo Finance financial metrics loaded.`);
+
+      // Extract current price and currency symbol
+      if (s.price) {
+        fundamentals.currentPrice = s.price.regularMarketPrice || s.financialData?.currentPrice || "unavailable";
+        fundamentals.currencySymbol = s.price.currencySymbol || (ticker.endsWith(".NS") || ticker.endsWith(".BO") ? "₹" : "$");
+      } else if (s.financialData?.currentPrice) {
+        fundamentals.currentPrice = s.financialData.currentPrice;
+        fundamentals.currencySymbol = ticker.endsWith(".NS") || ticker.endsWith(".BO") ? "₹" : "$";
+      } else {
+        fundamentals.currentPrice = "unavailable";
+        fundamentals.currencySymbol = ticker.endsWith(".NS") || ticker.endsWith(".BO") ? "₹" : "$";
+      }
+
+      logs.push(`Yahoo Finance financial metrics loaded. Live Price: ${fundamentals.currencySymbol}${fundamentals.currentPrice}`);
     }
   } catch (error: any) {
     logs.push(`Warning: Failed fetching fundamentals: ${error.message || error}`);

@@ -76,6 +76,49 @@ export default function ResearchPage() {
     });
   }, [supabase, router]);
 
+  // Load last research from localStorage on mount
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("parakhiq_last_research");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.memo) {
+          setMemo(parsed.memo);
+          setTicker(parsed.ticker || "");
+          setExchange(parsed.exchange || "");
+          setCurrentNode(parsed.currentNode || "");
+          setQuery(parsed.query || "");
+          setLogs(parsed.logs || []);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load last research from cache:", e);
+    }
+  }, []);
+
+  // Save last research to localStorage on changes
+  useEffect(() => {
+    if (memo) {
+      try {
+        localStorage.setItem(
+          "parakhiq_last_research",
+          JSON.stringify({
+            memo,
+            ticker,
+            exchange,
+            currentNode,
+            query,
+            logs,
+          })
+        );
+      } catch (e) {
+        console.error("Failed to save research state to cache:", e);
+      }
+    } else {
+      localStorage.removeItem("parakhiq_last_research");
+    }
+  }, [memo, ticker, exchange, currentNode, query, logs]);
+
   // Click outside listener for autocomplete suggestions
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -322,6 +365,22 @@ export default function ResearchPage() {
             >
               {isAnalyzing ? "ANALYZING..." : "RUN RESEARCH"}
             </button>
+            {memo && !isAnalyzing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentNode("");
+                  setMemo(null);
+                  setQuery("");
+                  setTicker("");
+                  setExchange("");
+                  setLogs([]);
+                }}
+                className="bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest px-4 py-2 rounded text-xs font-mono text-on-surface transition-colors cursor-pointer"
+              >
+                RESET
+              </button>
+            )}
           </form>
         </div>
 
@@ -433,10 +492,17 @@ export default function ResearchPage() {
                 <div className="bg-surface-container border border-outline-variant p-6 rounded space-y-4">
                   <div className="flex flex-wrap justify-between items-center gap-3">
                     <div>
-                      <span className="text-[10px] font-mono bg-secondary/15 text-secondary border border-secondary/20 px-2.5 py-0.5 rounded uppercase mr-2 font-bold select-all">
-                        {ticker || "RELIANCE.NS"}
-                      </span>
-                      <span className="text-xs font-mono text-on-surface-variant">{exchange || "NSE"}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono bg-secondary/15 text-secondary border border-secondary/20 px-2.5 py-0.5 rounded uppercase font-bold select-all">
+                          {ticker || "RELIANCE.NS"}
+                        </span>
+                        <span className="text-xs font-mono text-on-surface-variant">{exchange || "NSE"}</span>
+                        {memo.kpis?.currentPrice && memo.kpis.currentPrice !== "unavailable" && (
+                          <span className="text-[10px] font-mono bg-primary/15 text-primary border border-primary/20 px-2 py-0.5 rounded font-bold">
+                            Live Price: {memo.kpis.currentPrice}
+                          </span>
+                        )}
+                      </div>
                       <h2 className="text-base font-hanken font-bold text-on-surface mt-1.5">
                         {memo.companyName || query}
                       </h2>

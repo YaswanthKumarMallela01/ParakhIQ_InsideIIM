@@ -1,8 +1,8 @@
 import YahooFinanceClass from "yahoo-finance2";
 const yahooFinance = new YahooFinanceClass({ suppressNotices: ["yahooSurvey"] });
 import { tavily } from "@tavily/core";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { z } from "zod";
+import { callLlmStructured } from "./llm";
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "" });
 
@@ -67,27 +67,18 @@ export async function calculateHoldingPrediction(ticker: string, companyName: st
       logs += `Tavily news warning: ${e.message || e}. Using neutral sentiment. `;
     }
 
-    // 3. Score news sentiment using Gemini
+    // 3. Score news sentiment using our fallback LLM layer
     let sentimentVal = 0;
     if (newsContext) {
       try {
-        const model = new ChatGoogleGenerativeAI({
-          model: "gemini-2.5-flash",
-          apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
-          temperature: 0.1,
-        });
-
-        const structuredModel = model.withStructuredOutput(sentimentSchema);
-
-        const response = await structuredModel.invoke([
-          ["system", "You are a quantitative financial sentiment analyzer. Grade the following recent news for a company."],
-          ["human", `Analyze the news articles for ${companyName} (${ticker}) and return the net sentiment score (-1 to +1):\n\n${newsContext}`],
-        ]);
-
-        sentimentVal = response.score;
-        logs += `Gemini scored sentiment: ${sentimentVal.toFixed(2)} (${response.explanation}). `;
+        const systemPrompt = "You are a quantitative financial sentiment analyzer. Grade the following recent news for a company.";
+        const userPrompt = `Analyze the news articles for ${companyName} (${ticker}) and return the net sentiment score (-1 to +1):\n\n${newsContext}`;
+        
+        const response = await callLlmStructured(systemPrompt, userPrompt, sentimentSchema, 0.1);
+        sentimentVal = response.data.score;
+        logs += `LLM (${response.source}) scored sentiment: ${sentimentVal.toFixed(2)} (${response.data.explanation}). `;
       } catch (e: any) {
-        logs += `Gemini sentiment warning: ${e.message || e}. `;
+        logs += `LLM sentiment warning: ${e.message || e}. `;
       }
     }
 

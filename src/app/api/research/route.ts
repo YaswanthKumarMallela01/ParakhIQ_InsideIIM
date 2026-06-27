@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
           if (finalMemo) {
             const { error: saveError } = await adminSupabase.from("research_history").insert({
               user_id: user.id,
-              company_name: companyName,
+              company_name: finalMemo.companyName || companyName,
               ticker: resolvedTicker,
               verdict: finalVerdict,
               confidence: Number(finalConfidence),

@@ -1,6 +1,6 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { z } from "zod";
 import { AgentState } from "../state";
+import { callLlmStructured } from "../llm";
 
 // Structured schema for challenge assessment
 const challengeSchema = z.object({
@@ -19,15 +19,7 @@ export async function challengeThesisNode(state: typeof AgentState.State) {
 
   logs.push(`Evaluating pre-fetched disconfirming evidence against investment thesis...`);
 
-  // Ask Gemini to evaluate the pre-fetched disconfirming evidence against the current thesis
-  const model = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
-    temperature: 0.1,
-  });
-
-  const structuredModel = model.withStructuredOutput(challengeSchema);
-
+  // Ask LLM to evaluate the pre-fetched disconfirming evidence against the current thesis
   const systemPrompt = `You are a skeptical, independent risk manager at ParakhIQ. Your job is to examine an investment thesis and actively look for disconfirming evidence to see if it holds up under pressure. You must be objective, factual, and avoid generic pessimism.`;
 
   const userPrompt = `
@@ -49,16 +41,13 @@ Note: We are on loop iteration ${loopCount + 1}/2. If this is iteration 2, we wi
 `;
 
   try {
-    const result = await structuredModel.invoke([
-      ["system", systemPrompt],
-      ["human", userPrompt],
-    ]);
+    const result = await callLlmStructured(systemPrompt, userPrompt, challengeSchema, 0.1);
 
-    const hasMaterial = result.hasMaterialEvidence;
-    const challengeEvidence = result.challengeEvidence;
-    const explanation = result.explanation;
+    const hasMaterial = result.data.hasMaterialEvidence;
+    const challengeEvidence = result.data.challengeEvidence;
+    const explanation = result.data.explanation;
 
-    logs.push(`Challenge result: hasMaterialEvidence = ${hasMaterial}. Explanation: ${explanation}`);
+    logs.push(`Challenge result: hasMaterialEvidence = ${hasMaterial}. Explanation: ${explanation} (${result.source})`);
 
     const challengeRound = {
       loopIndex: loopCount,

@@ -1,6 +1,6 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { z } from "zod";
 import { AgentState } from "../state";
+import { callLlmStructured } from "../llm";
 
 const verdictSchema = z.object({
   verdict: z.enum(["Invest", "Pass"]).describe("The investment recommendation: Invest or Pass"),
@@ -9,13 +9,16 @@ const verdictSchema = z.object({
   killCriteria: z.array(z.string()).min(3).max(5).describe("3-5 highly specific, measurable future trigger events or data points that would immediately invalidate/reverse this call (e.g., 'debt/equity ratio exceeds 0.7', 'promoter shareholding drops below 48%', etc.)")
 });
 
-export async function synthesizeVerdictNode(state: typeof AgentState.State) {
-  const model = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
-    temperature: 0.2,
-  });
+const cleanText = (text: string) => {
+  return text
+    .replace(/\*\*+/g, "")
+    .replace(/\*+/g, "")
+    .replace(/#+/g, "")
+    .replace(/`/g, "")
+    .trim();
+};
 
+export async function synthesizeVerdictNode(state: typeof AgentState.State) {
   const logs: string[] = [];
   logs.push(`Synthesizing final verdict and drafting kill criteria based on thesis and challenge history...`);
 
@@ -52,19 +55,20 @@ Return your decision in the structured output format.
 `;
 
   try {
-    const structuredModel = model.withStructuredOutput(verdictSchema);
-    const result = await structuredModel.invoke([
-      ["system", systemPrompt],
-      ["human", userPrompt],
-    ]);
+    const result = await callLlmStructured(systemPrompt, userPrompt, verdictSchema, 0.2);
+
+    const verdict = result.data.verdict;
+    const confidence = result.data.confidence;
+    const reasoning = cleanText(result.data.reasoning);
+    const killCriteria = (result.data.killCriteria || []).map(cleanText);
 
     return {
-      verdict: result.verdict,
-      confidence: result.confidence,
-      reasoning: result.reasoning,
-      killCriteria: result.killCriteria,
+      verdict,
+      confidence,
+      reasoning,
+      killCriteria,
       logs: logs.concat([
-        `Synthesized verdict: ${result.verdict.toUpperCase()} (Confidence: ${result.confidence}%)`,
+        `Synthesized verdict: ${verdict.toUpperCase()} (Confidence: ${confidence}%) via ${result.source}`,
       ]),
     };
   } catch (error: any) {

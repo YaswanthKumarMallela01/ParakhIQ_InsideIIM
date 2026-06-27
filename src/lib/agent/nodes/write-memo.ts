@@ -1,6 +1,6 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { z } from "zod";
 import { AgentState, FinalMemo } from "../state";
+import { callLlmStructured } from "../llm";
 
 const memoSchema = z.object({
   summary: z.string().describe("A concise, dense, executive summary (2-3 sentences) of the investment decision."),
@@ -17,13 +17,40 @@ const memoSchema = z.object({
   }),
 });
 
-export async function writeMemoNode(state: typeof AgentState.State) {
-  const model = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
-    temperature: 0.1,
-  });
+const cleanText = (text: string) => {
+  return text
+    .replace(/\*\*+/g, "")
+    .replace(/\*+/g, "")
+    .replace(/#+/g, "")
+    .replace(/`/g, "")
+    .trim();
+};
 
+function formatMarketCap(mc: any): string {
+  if (!mc || mc === "unavailable") return "unavailable";
+  const num = Number(mc);
+  if (isNaN(num)) return String(mc);
+  if (num >= 1e12) return `₹${(num / 1e12).toFixed(2)}T`;
+  if (num >= 1e7) return `₹${(num / 1e7).toFixed(2)} Cr`;
+  if (num >= 1e5) return `₹${(num / 1e5).toFixed(2)}L`;
+  return `₹${num.toLocaleString("en-IN")}`;
+}
+
+function formatPercentage(p: any): string {
+  if (!p || p === "unavailable") return "unavailable";
+  const num = Number(p);
+  if (isNaN(num)) return String(p);
+  return `${num.toFixed(2)}%`;
+}
+
+function formatDecimal(d: any): string {
+  if (!d || d === "unavailable") return "unavailable";
+  const num = Number(d);
+  if (isNaN(num)) return String(d);
+  return num.toFixed(2);
+}
+
+export async function writeMemoNode(state: typeof AgentState.State) {
   const logs: string[] = [];
   logs.push(`Assembling final investment memo and formatting key metrics...`);
 
@@ -32,6 +59,8 @@ export async function writeMemoNode(state: typeof AgentState.State) {
   const rawMarketCap = state.fundamentals.marketCap;
   const rawPromoter = state.fundamentals.promoterHolding;
   const rawDe = state.fundamentals.debtToEquity;
+
+  const currencySymbol = state.fundamentals.currencySymbol || "₹";
 
   const systemPrompt = `You are a Senior Equity Editor at ParakhIQ. Your job is to format the final investment analysis into a dense, terminal-style structured memo. You must extract and format the key financials accurately based on the data.`;
 
@@ -63,12 +92,29 @@ Your task:
 4. Write a concise executive summary.
 `;
 
+  const formattedCurrentPrice = state.fundamentals.currentPrice !== undefined && state.fundamentals.currentPrice !== "unavailable"
+    ? `${currencySymbol}${Number(state.fundamentals.currentPrice).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "unavailable";
+
   try {
-    const structuredModel = model.withStructuredOutput(memoSchema);
-    const result = await structuredModel.invoke([
-      ["system", systemPrompt],
-      ["human", userPrompt],
-    ]);
+    const result = await callLlmStructured(systemPrompt, userPrompt, memoSchema, 0.1);
+
+    const data = result.data;
+    const cleanedSummary = cleanText(data.summary);
+    const cleanedThesisPoints = (data.thesisPoints || []).map(cleanText);
+    const cleanedKeyRisks = (data.keyRisks || []).map(cleanText);
+
+    // Apply strict cleanups on result KPIs
+    const cleanedKpis = {
+      peRatio: cleanText(data.kpis.peRatio),
+      peSectorRatio: cleanText(data.kpis.peSectorRatio),
+      marketCap: cleanText(data.kpis.marketCap),
+      fiftyTwoWeekHigh: cleanText(data.kpis.fiftyTwoWeekHigh),
+      fiftyTwoWeekLow: cleanText(data.kpis.fiftyTwoWeekLow),
+      promoterHolding: cleanText(data.kpis.promoterHolding),
+      debtToEquity: cleanText(data.kpis.debtToEquity),
+      currentPrice: formattedCurrentPrice,
+    };
 
     const finalMemo: FinalMemo = {
       verdict: state.verdict,
@@ -76,22 +122,52 @@ Your task:
       ticker: state.ticker,
       companyName: state.companyName,
       investorProfile: state.investorProfile,
-      summary: result.summary,
-      thesisPoints: result.thesisPoints,
-      keyRisks: result.keyRisks,
-      kpis: result.kpis,
+      summary: cleanedSummary,
+      thesisPoints: cleanedThesisPoints,
+      keyRisks: cleanedKeyRisks,
+      kpis: cleanedKpis,
       killCriteria: state.killCriteria,
       priceData: state.priceHistory.slice(-30), // send latest 30 points to keep visual payload clean
     };
 
     return {
       memo: finalMemo,
-      logs: logs.concat([`Final memo generated and stored.`]),
+      logs: logs.concat([`Final memo generated and stored (${result.source}).`]),
     };
   } catch (error: any) {
     logs.push(`Error in write_memo: ${error.message || error}`);
     
-    // Fallback memo
+    // Parse thesis sentences for bullet points in case of fallback
+    let fallbackThesisPoints = [state.thesis || "Core business shows resilience."];
+    if (state.thesis) {
+      const lines = state.thesis
+        .split("\n")
+        .map(line => line.trim())
+        .filter(line => line.startsWith("*") || line.startsWith("-") || /^\d+\./.test(line))
+        .map(line => line.replace(/^[\*\-\d\.\s]+/, "").trim())
+        .map(cleanText)
+        .filter(Boolean);
+      if (lines.length >= 3) {
+        fallbackThesisPoints = lines.slice(0, 5);
+      } else {
+        const sentences = state.thesis
+          .split(/[.!?]+/)
+          .map(s => s.trim())
+          .map(cleanText)
+          .filter(s => s.length > 20);
+        if (sentences.length >= 3) {
+          fallbackThesisPoints = sentences.slice(0, 4);
+        }
+      }
+    }
+
+    const fmtHigh = state.fundamentals.fiftyTwoWeekHigh !== "unavailable"
+      ? `${currencySymbol}${Number(state.fundamentals.fiftyTwoWeekHigh).toLocaleString("en-IN")}`
+      : "unavailable";
+    const fmtLow = state.fundamentals.fiftyTwoWeekLow !== "unavailable"
+      ? `${currencySymbol}${Number(state.fundamentals.fiftyTwoWeekLow).toLocaleString("en-IN")}`
+      : "unavailable";
+
     const fallbackMemo: FinalMemo = {
       verdict: state.verdict || "Pass",
       confidence: state.confidence || 50,
@@ -99,16 +175,17 @@ Your task:
       companyName: state.companyName || "Unknown",
       investorProfile: state.investorProfile || "aggressive",
       summary: "Investment analysis complete. Final recommendation: " + (state.verdict || "Pass"),
-      thesisPoints: [state.thesis || "Core business shows resilience."],
+      thesisPoints: fallbackThesisPoints,
       keyRisks: ["Market volatility", "Regulatory changes"],
       kpis: {
-        peRatio: String(rawPe),
+        peRatio: formatDecimal(rawPe),
         peSectorRatio: "unavailable",
-        marketCap: String(rawMarketCap),
-        fiftyTwoWeekHigh: String(state.fundamentals.fiftyTwoWeekHigh),
-        fiftyTwoWeekLow: String(state.fundamentals.fiftyTwoWeekLow),
-        promoterHolding: String(rawPromoter),
-        debtToEquity: String(rawDe),
+        marketCap: formatMarketCap(rawMarketCap),
+        fiftyTwoWeekHigh: fmtHigh,
+        fiftyTwoWeekLow: fmtLow,
+        promoterHolding: formatPercentage(rawPromoter),
+        debtToEquity: formatDecimal(rawDe),
+        currentPrice: formattedCurrentPrice,
       },
       killCriteria: state.killCriteria || [],
       priceData: state.priceHistory.slice(-30),

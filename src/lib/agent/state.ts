@@ -20,6 +20,8 @@ export interface Fundamentals {
   promoterHolding: string | number;
   promoterHoldingChange: string | number;
   debtToEquity: string | number;
+  currentPrice?: string | number;
+  currencySymbol?: string;
 }
 
 export interface ChallengeRound {
@@ -45,6 +47,7 @@ export interface FinalMemo {
     fiftyTwoWeekLow: string;
     promoterHolding: string;
     debtToEquity: string;
+    currentPrice?: string;
   };
   killCriteria: string[];
   priceData: PricePoint[];

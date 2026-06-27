@@ -6,6 +6,7 @@ export async function resolveTickerNode(state: typeof AgentState.State) {
   const query = state.companyName.trim();
   let resolvedTicker = "";
   let resolvedExchange = "";
+  let resolvedCompanyName = "";
   let logs: string[] = [];
 
   logs.push(`Resolving stock symbol for "${query}"...`);
@@ -20,10 +21,12 @@ export async function resolveTickerNode(state: typeof AgentState.State) {
       if (directQuote && directQuote.symbol) {
         resolvedTicker = directQuote.symbol;
         resolvedExchange = directQuote.exchange || (resolvedTicker.endsWith(".NS") ? "NSE" : resolvedTicker.endsWith(".BO") ? "BSE" : "GLOBAL");
+        resolvedCompanyName = directQuote.longName || directQuote.shortName || query;
         logs.push(`Symbol "${resolvedTicker}" validated directly on ${resolvedExchange}.`);
         return {
           ticker: resolvedTicker,
           exchange: resolvedExchange,
+          companyName: resolvedCompanyName,
           logs,
         };
       }
@@ -51,39 +54,37 @@ export async function resolveTickerNode(state: typeof AgentState.State) {
             q.exchange === "BOM"
         );
 
-        if (indianQuote) {
-          resolvedTicker = indianQuote.symbol;
-          resolvedExchange = indianQuote.exchange || (resolvedTicker.endsWith(".NS") ? "NSE" : "BSE");
-          logs.push(`Resolved search to Indian equity: ${resolvedTicker} (${resolvedExchange})`);
-        } else {
-          // Fall back to first global equity quote
-          const globalQuote = equityQuotes[0];
-          resolvedTicker = globalQuote.symbol;
-          resolvedExchange = globalQuote.exchange || "GLOBAL";
-          logs.push(`Resolved search to global equity: ${resolvedTicker} (${resolvedExchange})`);
-        }
+        const selectedQuote = indianQuote || equityQuotes[0];
+        resolvedTicker = selectedQuote.symbol;
+        resolvedExchange = selectedQuote.exchange || (resolvedTicker.endsWith(".NS") ? "NSE" : "BSE");
+        resolvedCompanyName = selectedQuote.longname || selectedQuote.shortname || query;
+        logs.push(`Resolved search to: ${resolvedTicker} (${resolvedExchange})`);
       } else {
         // Fall back to first quote in list
         const firstQuote = quotes[0];
         resolvedTicker = firstQuote.symbol;
         resolvedExchange = firstQuote.exchange || "GLOBAL";
+        resolvedCompanyName = firstQuote.longname || firstQuote.shortname || query;
         logs.push(`Resolved search to symbol: ${resolvedTicker} (${resolvedExchange})`);
       }
     } else {
       // Guess ticker as last resort (Indian market default)
       resolvedTicker = `${potentialTicker}.NS`;
       resolvedExchange = "NSE (Guess)";
+      resolvedCompanyName = query;
       logs.push(`No quotes returned from search. Guessing ticker "${resolvedTicker}"`);
     }
   } catch (error: any) {
     resolvedTicker = `${potentialTicker}.NS`;
     resolvedExchange = "NSE (Guess)";
+    resolvedCompanyName = query;
     logs.push(`Search failed: ${error.message || error}. Guessing ticker "${resolvedTicker}"`);
   }
 
   return {
     ticker: resolvedTicker,
     exchange: resolvedExchange,
+    companyName: resolvedCompanyName,
     logs,
   };
 }
