@@ -17,7 +17,7 @@ graph TD
   challenge --> router{06. Revise or Proceed}
   router -- "Loop 1 & 2 (Bearish evidence found)" --> thesis
   router -- "No material new evidence / Limit reached" --> verdict[07. Synthesize Verdict]
-  verdict --> memo[08. Write Memo]
+  verdict --> memo[08. Write Memo & Record Sources]
 ```
 
 1. **intake**: Parses company name & user investor profile (Conservative vs Aggressive).
@@ -27,7 +27,9 @@ graph TD
 5. **challenge_thesis**: Targeted Tavily search looks for bearish evidence against the company (e.g. debt issues, critiques, market drops). Gemini evaluates if this is a material challenge.
 6. **revise_or_proceed (Conditional Routing)**: If material bearish evidence is found, loops back to build_thesis (max 2 times) to refine the thesis. Otherwise, proceeds.
 7. **synthesize_verdict**: Gemini generates an Invest/Pass verdict, confidence score, profile-tailored reasoning, and 3-5 explicit, measurable "kill criteria".
-8. **write_memo**: Formats and packages output into a clean, terminal-style structured report.
+8. **write_memo**: Formats and packages output into a clean, terminal-style structured report, archiving all source citations used during the analysis.
+
+> **Feature Note**: The platform also supports **Live Profile Toggling** (which dynamically recalculates the verdict based on cached memos), **PDF Exports**, and **Public Shareable Links** for completed research runs.
 
 ---
 
@@ -43,6 +45,7 @@ For portfolio holdings, predictions are computed as a **range** with a **midpoin
 
 - **Gemini-Only (gemini-2.5-flash)**: We use Gemini 2.5 Flash via `@langchain/google-genai` for all reasoning and structured Zod parsing. It is extremely fast, highly capable at structured JSON output, and operates entirely within Gemini's generous free tier.
 - **Supabase for Auth + Database**: Choosing Supabase allows us to handle User Management (email/password auth), Anonymous Sign-Ins (Guest Mode), and Postgres relational database schemas under a single unified SDK. This significantly reduced configuration overhead compared to a fragmented NextAuth + external DB stack.
+- **Aggregated Portfolio View vs Individual Tracking**: We implemented a macro-level overview (donut charts, weighted predictions, concentration warnings) to complement individual holding metrics, making the portfolio page a holistic dashboard.
 - **Range Predictions vs. Point Estimates**: We deliberately output a 1-year prediction range rather than a single point estimate. Financial markets are stochastic, and presenting a false-precision point estimate is misleading. A range combined with news sentiment provides a realistic, heuristic estimation of price direction.
 - **Visual reasoning stepper**: Instead of exposing the agent as a chat bubble, intermediate states are streamed via Server-Sent Events (SSE) and rendered as a visual stepper (Thesis → Challenge → Revision → Verdict) for maximum transparency.
 
@@ -50,8 +53,9 @@ For portfolio holdings, predictions are computed as a **range** with a **midpoin
 
 ## Database Schema (Postgres)
 
-- **`holdings`**: Tracks company name, ticker, and amount intended to invest per user.
+- **`holdings`**: Tracks company name, ticker, sector, and amount intended to invest per user.
 - **`predictions`**: Tracks chronological prediction ranges, sentiment scores, and directional guidance (`hold`, `reconsider`, `reduce`) over time per holding (enabling charting progress).
+- **`research_history`**: Caches full analysis runs, source citations, investor profile verdicts, and public sharing configurations, acting as a historical ledger.
 - **`user_preferences`**: Stores user email digest settings (`email_digest_enabled`).
 
 ---
@@ -97,3 +101,5 @@ Open [http://localhost:3000](http://localhost:3000) to view the terminal.
 2. **Advanced Charting**: Integrate real Candlestick charts with technical indicators (RSI, MACD) in Recharts rather than simple Area price lines.
 3. **Broad Exchange Support**: Add support for global exchanges (NYSE, NASDAQ, LSE) with live currency conversions to INR.
 4. **WebSocket Streaming**: Transition from SSE streaming to two-way WebSockets for even faster real-time log updates.
+5. **Headless Browser PDF Export**: We deliberately simplified PDF generation to run via `jspdf` on the client/edge for Vercel compatibility, rather than using a heavy Puppeteer server-side headless browser.
+

@@ -10,6 +10,13 @@ export function Nav() {
   const router = useRouter();
   const supabase = createSupabaseBrowser();
   const [user, setUser] = useState<any>(null);
+  const [time, setTime] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setTime(new Date());
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -76,6 +83,11 @@ export function Nav() {
         </div>
 
         <div className="flex items-center gap-4">
+          {time && (
+            <div className="hidden sm:block text-[10px] font-mono text-on-surface-variant bg-surface-container py-1 px-2.5 rounded border border-outline-variant">
+              IST: {time.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
+            </div>
+          )}
           {user && (() => {
             const isGuest = user.is_anonymous || user.email?.startsWith("guest_");
             return (

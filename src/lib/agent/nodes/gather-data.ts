@@ -1,7 +1,7 @@
 import YahooFinanceClass from "yahoo-finance2";
 const yahooFinance = new YahooFinanceClass({ suppressNotices: ["yahooSurvey"] });
 import { tavily } from "@tavily/core";
-import { AgentState, PricePoint, NewsArticle, Fundamentals } from "../state";
+import { AgentState, PricePoint, NewsArticle, Fundamentals, Source } from "../state";
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "" });
 
@@ -28,6 +28,7 @@ export async function gatherDataNode(state: typeof AgentState.State) {
     debtToEquity: "unavailable",
   };
   let newsArticles: NewsArticle[] = [];
+  let sources: Source[] = [];
   let sectorContext = "Sector data unavailable";
   let challengeEvidence = "Bearish risk data unavailable";
 
@@ -143,11 +144,27 @@ export async function gatherDataNode(state: typeof AgentState.State) {
         url: r.url || "",
         content: r.content || "",
       }));
+      sources.push(
+        ...newsResults.results.map((r: any) => ({
+          title: r.title || "News Article",
+          url: r.url || "",
+          snippet: r.content || "",
+          used_for: "news",
+        }))
+      );
     }
 
     // Parse Sector PE
     if (sectorResults?.results) {
       sectorContext = sectorResults.results.map((r: any) => r.content).join("\n");
+      sources.push(
+        ...sectorResults.results.map((r: any) => ({
+          title: r.title || "Sector Context",
+          url: r.url || "",
+          snippet: r.content || "",
+          used_for: "sector_context",
+        }))
+      );
     }
 
     // Parse Bearish Risks
@@ -155,9 +172,17 @@ export async function gatherDataNode(state: typeof AgentState.State) {
       challengeEvidence = bearResults.results
         .map((r: any) => `Title: ${r.title}\nContent: ${r.content}\nURL: ${r.url}`)
         .join("\n\n");
+      sources.push(
+        ...bearResults.results.map((r: any) => ({
+          title: r.title || "Bearish Risk Analysis",
+          url: r.url || "",
+          snippet: r.content || "",
+          used_for: "bearish_evidence",
+        }))
+      );
     }
 
-    logs.push(`Tavily web research completed successfully.`);
+    logs.push(`Tavily web research completed successfully. Gathered ${sources.length} sources.`);
   } catch (error: any) {
     logs.push(`Warning: Failed Tavily search: ${error.message || error}`);
   }
@@ -166,6 +191,7 @@ export async function gatherDataNode(state: typeof AgentState.State) {
     priceHistory,
     fundamentals,
     newsArticles,
+    sources,
     sectorContext,
     challengeEvidence,
     logs,

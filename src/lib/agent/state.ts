@@ -11,6 +11,13 @@ export interface NewsArticle {
   content: string;
 }
 
+export interface Source {
+  title: string;
+  url: string;
+  snippet: string;
+  used_for: string;
+}
+
 export interface Fundamentals {
   peRatio: string | number;
   peSectorRatio: string | number;
@@ -78,6 +85,10 @@ export const AgentState = Annotation.Root({
   }),
   newsArticles: Annotation<NewsArticle[]>({
     reducer: (x, y) => y ?? x,
+    default: () => [],
+  }),
+  sources: Annotation<Source[]>({
+    reducer: (x, y) => x.concat(y ?? []),
     default: () => [],
   }),
   sectorContext: Annotation<string>(),

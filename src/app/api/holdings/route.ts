@@ -146,10 +146,16 @@ export async function POST(request: Request) {
 
     // Fetch the current price today to store as the purchase price
     let purchasePrice: number | null = null;
+    let sector = "Uncategorized";
     try {
       const quote = (await yahooFinance.quote(ticker)) as any;
       if (quote) {
         purchasePrice = quote.regularMarketPrice || quote.regularMarketPreviousClose || null;
+      }
+      
+      const summary = await yahooFinance.quoteSummary(ticker, { modules: ["assetProfile"] });
+      if (summary?.assetProfile?.sector) {
+        sector = summary.assetProfile.sector;
       }
     } catch (e) {
       console.error("Failed to resolve purchase price quote:", e);
@@ -164,6 +170,7 @@ export async function POST(request: Request) {
         ticker,
         amount_invested: Number(amountInvested),
         purchase_price: purchasePrice,
+        sector,
       })
       .select()
       .single();

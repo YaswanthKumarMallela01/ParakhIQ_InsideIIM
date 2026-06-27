@@ -198,18 +198,24 @@ export async function POST(request: Request) {
               company: "Reliance Industries Ltd",
               ticker: "RELIANCE.NS",
               amount_invested: 250000,
+              purchase_price: 2450.0,
+              sector: "Energy",
             },
             {
               user_id: user.id,
               company: "Tata Consultancy Services Ltd",
               ticker: "TCS.NS",
               amount_invested: 150000,
+              purchase_price: 3820.0,
+              sector: "Technology",
             },
             {
               user_id: user.id,
               company: "HDFC Bank Ltd",
               ticker: "HDFCBANK.NS",
               amount_invested: 100000,
+              purchase_price: 1460.0,
+              sector: "Financial Services",
             },
           ];
 
@@ -250,6 +256,76 @@ export async function POST(request: Request) {
             ].filter((p) => p.holding_id !== undefined);
 
             await adminSupabase.from("predictions").insert(demoPredictions);
+
+            // 5. Seed research history
+            const demoHistory = [
+              {
+                user_id: user.id,
+                company_name: "Reliance Industries Ltd",
+                ticker: "RELIANCE.NS",
+                verdict: "Invest",
+                confidence: 85,
+                memo: {
+                  verdict: "Invest",
+                  confidence: 85,
+                  ticker: "RELIANCE.NS",
+                  companyName: "Reliance Industries Ltd",
+                  investorProfile: "conservative",
+                  summary: "Strong conglomerate with solid fundamentals.",
+                  thesisPoints: ["Market leader in multiple sectors", "Consistent cash flow", "Strong promoter backing"],
+                  keyRisks: ["Regulatory risks", "Debt levels"],
+                  kpis: {
+                    peRatio: "25.4",
+                    peSectorRatio: "22.1",
+                    marketCap: "₹19.2L Cr",
+                    fiftyTwoWeekHigh: "₹3,024.90",
+                    fiftyTwoWeekLow: "₹2,220.30",
+                    promoterHolding: "50.49%",
+                    debtToEquity: "0.42",
+                    currentPrice: "2450.0"
+                  },
+                  killCriteria: ["Debt to equity exceeds 1.0", "Core margins drop by 5%"],
+                },
+                sources: [
+                  { title: "Reliance Annual Report", url: "https://example.com/ril", snippet: "Strong growth in retail...", used_for: "news" }
+                ],
+                verdicts: {}
+              },
+              {
+                user_id: user.id,
+                company_name: "Tata Consultancy Services Ltd",
+                ticker: "TCS.NS",
+                verdict: "Invest",
+                confidence: 78,
+                memo: {
+                  verdict: "Invest",
+                  confidence: 78,
+                  ticker: "TCS.NS",
+                  companyName: "Tata Consultancy Services Ltd",
+                  investorProfile: "conservative",
+                  summary: "IT services leader with robust margins.",
+                  thesisPoints: ["Global client base", "High margins", "Consistent dividends"],
+                  keyRisks: ["Currency fluctuations", "US slowdown"],
+                  kpis: {
+                    peRatio: "32.1",
+                    peSectorRatio: "28.5",
+                    marketCap: "₹14.5L Cr",
+                    fiftyTwoWeekHigh: "₹4,120.00",
+                    fiftyTwoWeekLow: "₹3,100.50",
+                    promoterHolding: "72.30%",
+                    debtToEquity: "0.05",
+                    currentPrice: "3820.0"
+                  },
+                  killCriteria: ["Attrition rate exceeds 25%", "Operating margins fall below 22%"],
+                },
+                sources: [
+                  { title: "TCS Q3 Results", url: "https://example.com/tcs", snippet: "TCS reports strong Q3...", used_for: "news" }
+                ],
+                verdicts: {}
+              }
+            ];
+
+            await adminSupabase.from("research_history").insert(demoHistory);
           }
         }
       }

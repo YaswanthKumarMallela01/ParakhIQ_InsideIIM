@@ -80,9 +80,10 @@ export async function POST(request: NextRequest) {
               memo: cachedRun.memo,
               ticker: resolvedTicker,
               exchange: resolvedExchange,
+              sources: cachedRun.sources || [],
             });
             await sleep(100);
-            sendEvent("done", { success: true });
+            sendEvent("done", { success: true, id: cachedRun.id });
             controller.close();
             return;
           }
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
           let finalMemo: any = null;
           let finalVerdict = "Pass";
           let finalConfidence = 50;
+          let finalSources: any[] = [];
 
           for await (const chunk of agentStream) {
             const nodeName = Object.keys(chunk)[0];
@@ -106,6 +108,9 @@ export async function POST(request: NextRequest) {
             if (nodeData.confidence) {
               finalConfidence = nodeData.confidence;
             }
+            if (nodeData.sources && Array.isArray(nodeData.sources)) {
+              finalSources = nodeData.sources;
+            }
 
             sendEvent("update", {
               node: nodeName,
@@ -117,25 +122,39 @@ export async function POST(request: NextRequest) {
               memo: nodeData.memo,
               ticker: nodeData.ticker || resolvedTicker,
               exchange: nodeData.exchange || resolvedExchange,
+              sources: nodeData.sources,
             });
           }
 
           // Save completed research run to database cache
+          let newId = null;
           if (finalMemo) {
-            const { error: saveError } = await adminSupabase.from("research_history").insert({
-              user_id: user.id,
-              company_name: finalMemo.companyName || companyName,
-              ticker: resolvedTicker,
-              verdict: finalVerdict,
-              confidence: Number(finalConfidence),
-              memo: finalMemo,
-            });
+            const verdictsPayload: Record<string, any> = {};
+            verdictsPayload[investorProfile] = finalMemo;
+
+            const { data: insertedData, error: saveError } = await adminSupabase
+              .from("research_history")
+              .insert({
+                user_id: user.id,
+                company_name: finalMemo.companyName || companyName,
+                ticker: resolvedTicker,
+                verdict: finalVerdict,
+                confidence: Number(finalConfidence),
+                memo: finalMemo,
+                sources: finalSources,
+                verdicts: verdictsPayload,
+              })
+              .select("id")
+              .single();
+
             if (saveError) {
               console.error("Failed to save research to cache:", saveError);
+            } else if (insertedData) {
+              newId = insertedData.id;
             }
           }
 
-          sendEvent("done", { success: true });
+          sendEvent("done", { success: true, id: newId });
           controller.close();
         } catch (error: any) {
           sendEvent("error", { error: error.message || error });

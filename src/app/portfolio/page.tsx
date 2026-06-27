@@ -8,6 +8,7 @@ import { Disclaimer } from "@/components/disclaimer";
 import { KPICard } from "@/components/kpi-card";
 import { AddHoldingModal } from "@/components/add-holding-modal";
 import { PriceChart } from "@/components/price-chart";
+import { PortfolioOverview } from "@/components/portfolio-overview";
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -187,6 +188,11 @@ export default function PortfolioPage() {
             subValue={isGuest ? "GUEST SESSIONS RUN ON-DEMAND ONLY" : "DAILY AT ~7:30 AM IST"}
           />
         </div>
+
+        {/* Portfolio Diagnostics */}
+        {!isLoading && holdingsCount > 0 && (
+          <PortfolioOverview />
+        )}
 
         {/* Holdings List */}
         {isLoading ? (

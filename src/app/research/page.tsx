@@ -11,6 +11,7 @@ import { KPICard } from "@/components/kpi-card";
 import { PriceChart } from "@/components/price-chart";
 import { AddHoldingModal } from "@/components/add-holding-modal";
 import { ValuationChart } from "@/components/valuation-chart";
+import { SourcesPanel } from "@/components/sources-panel";
 
 export default function ResearchPage() {
   const router = useRouter();
@@ -33,6 +34,8 @@ export default function ResearchPage() {
   const [memo, setMemo] = useState<any>(null);
   const [ticker, setTicker] = useState("");
   const [exchange, setExchange] = useState("");
+  const [sources, setSources] = useState<any[]>([]);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
 
   // Research history state
   const [history, setHistory] = useState<any[]>([]);
@@ -89,6 +92,9 @@ export default function ResearchPage() {
           setCurrentNode(parsed.currentNode || "");
           setQuery(parsed.query || "");
           setLogs(parsed.logs || []);
+          setSources(parsed.sources || []);
+          setAnalysisId(parsed.analysisId || null);
+          if (parsed.profile) setProfile(parsed.profile);
         }
       }
     } catch (e) {
@@ -109,6 +115,9 @@ export default function ResearchPage() {
             currentNode,
             query,
             logs,
+            sources,
+            analysisId,
+            profile,
           })
         );
       } catch (e) {
@@ -117,7 +126,7 @@ export default function ResearchPage() {
     } else {
       localStorage.removeItem("parakhiq_last_research");
     }
-  }, [memo, ticker, exchange, currentNode, query, logs]);
+  }, [memo, ticker, exchange, currentNode, query, logs, sources, analysisId, profile]);
 
   // Click outside listener for autocomplete suggestions
   useEffect(() => {
@@ -163,12 +172,46 @@ export default function ResearchPage() {
     setTicker(item.ticker);
     setExchange(item.memo.exchange || "NSE");
     setMemo(item.memo);
+    setSources(item.sources || []);
+    setAnalysisId(item.id);
     setCurrentNode("done");
     
     // Clear investment messages
     setInvestSuccessMsg(null);
     setInvestErrorMsg(null);
     setInvestAmount("");
+  };
+
+  const handleProfileToggle = async (newProfile: "conservative" | "aggressive") => {
+    if (newProfile === profile) return;
+    setProfile(newProfile);
+
+    // If analysis is already done, trigger reverdict
+    if (currentNode === "done" && analysisId) {
+      setIsAnalyzing(true);
+      setCurrentNode("reverdict");
+      setLogs(["Requesting specialized reverdict from cache..."]);
+      try {
+        const res = await fetch(`/api/research/${analysisId}/reverdict`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ investorProfile: newProfile }),
+        });
+        const data = await res.json();
+        if (data.memo) {
+          setMemo(data.memo);
+          setLogs((prev) => [...prev, "Reverdict generated successfully."]);
+          setCurrentNode("done");
+        } else {
+          throw new Error("Failed to generate reverdict");
+        }
+      } catch (err: any) {
+        setLogs((prev) => [...prev, `[ERROR] ${err.message || "Failed to switch profile"}`]);
+        setCurrentNode("done"); // revert
+      } finally {
+        setIsAnalyzing(false);
+      }
+    }
   };
 
   const handleStartAnalysis = async (e: React.FormEvent) => {
@@ -181,6 +224,8 @@ export default function ResearchPage() {
     setMemo(null);
     setTicker("");
     setExchange("");
+    setSources([]);
+    setAnalysisId(null);
     setInvestSuccessMsg(null);
     setInvestErrorMsg(null);
     setShowSuggestions(false);
@@ -232,8 +277,10 @@ export default function ResearchPage() {
               if (eventData.ticker) setTicker(eventData.ticker);
               if (eventData.exchange) setExchange(eventData.exchange);
               if (eventData.memo) setMemo(eventData.memo);
+              if (eventData.sources) setSources(eventData.sources);
             } else if (eventType === "done") {
               setCurrentNode("done");
+              if (eventData.id) setAnalysisId(eventData.id);
               fetchHistory(); // Refresh sidebar history
             } else if (eventType === "error") {
               setLogs((prev) => [...prev, `[ERROR] ${eventData.error}`]);
@@ -362,7 +409,7 @@ export default function ResearchPage() {
 
             <select
               value={profile}
-              onChange={(e) => setProfile(e.target.value as any)}
+              onChange={(e) => handleProfileToggle(e.target.value as any)}
               disabled={isAnalyzing}
               className="bg-surface-container-lowest border border-outline-variant rounded px-3 py-2 text-xs font-mono text-on-surface focus:outline-none focus:border-primary disabled:opacity-60"
             >
@@ -386,6 +433,8 @@ export default function ResearchPage() {
                   setQuery("");
                   setTicker("");
                   setExchange("");
+                  setSources([]);
+                  setAnalysisId(null);
                   setLogs([]);
                 }}
                 className="bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest px-4 py-2 rounded text-xs font-mono text-on-surface transition-colors cursor-pointer"
@@ -480,6 +529,11 @@ export default function ResearchPage() {
                         setCurrentNode("");
                         setMemo(null);
                         setQuery("");
+                        setTicker("");
+                        setExchange("");
+                        setSources([]);
+                        setAnalysisId(null);
+                        setLogs([]);
                       }}
                       className="flex-1 bg-surface-container-low hover:bg-surface-container-high border border-outline-variant py-2.5 rounded text-xs font-mono text-on-surface transition-colors"
                     >
@@ -496,16 +550,64 @@ export default function ResearchPage() {
               </div>
             )}
 
-            {/* Initial Search Guide */}
+            {/* Initial Search Guide & Top Picks */}
             {!isAnalyzing && !currentNode && (
-              <div className="bg-surface-container border border-outline-variant p-8 rounded text-center space-y-4">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-outline-variant/60 text-primary mb-2">
-                  <span className="font-mono text-xl">🔍</span>
+              <div className="space-y-6">
+                <div className="bg-surface-container border border-outline-variant p-8 rounded text-center space-y-4">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-outline-variant/60 text-primary mb-2">
+                    <span className="font-mono text-xl">🔍</span>
+                  </div>
+                  <h2 className="font-hanken font-bold text-base text-on-surface">START AN INVESTMENT THESIS</h2>
+                  <p className="text-xs text-on-surface-variant max-w-md mx-auto leading-relaxed">
+                    Enter any Indian listed company name or ticker suffix (NSE `.NS`, BSE `.BO`) or US ticker (e.g. `AAPL`). Our multi-agent researcher will gather market data, write an investment thesis, run disconfirming research loops, and render a final verdict.
+                  </p>
                 </div>
-                <h2 className="font-hanken font-bold text-base text-on-surface">START AN INVESTMENT THESIS</h2>
-                <p className="text-xs text-on-surface-variant max-w-md mx-auto leading-relaxed">
-                  Enter any Indian listed company name or ticker suffix (NSE `.NS`, BSE `.BO`). Our multi-agent researcher will gather market data, write an investment thesis, run disconfirming research loops, and render a final verdict.
-                </p>
+
+                <div className="bg-surface-container border border-outline-variant p-6 rounded space-y-4">
+                  <div className="flex justify-between items-center border-b border-outline-variant pb-2">
+                    <h3 className="text-xs font-mono font-bold tracking-widest text-on-surface-variant uppercase">
+                      Top 10 Stocks to Watch (India & US)
+                    </h3>
+                    <span className="text-[9px] font-mono text-primary font-bold">SUGGESTIONS</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {[
+                      { name: "Reliance", ticker: "RELIANCE.NS", region: "IND" },
+                      { name: "TCS", ticker: "TCS.NS", region: "IND" },
+                      { name: "HDFC Bank", ticker: "HDFCBANK.NS", region: "IND" },
+                      { name: "Infosys", ticker: "INFY.NS", region: "IND" },
+                      { name: "ITC", ticker: "ITC.NS", region: "IND" },
+                      { name: "Apple", ticker: "AAPL", region: "US" },
+                      { name: "Microsoft", ticker: "MSFT", region: "US" },
+                      { name: "Nvidia", ticker: "NVDA", region: "US" },
+                      { name: "Alphabet", ticker: "GOOGL", region: "US" },
+                      { name: "Amazon", ticker: "AMZN", region: "US" },
+                    ].map((stock) => (
+                      <button
+                        key={stock.ticker}
+                        onClick={() => {
+                          setQuery(stock.ticker);
+                          // We delay submitting so state updates first
+                          setTimeout(() => {
+                            const event = new Event('submit', { cancelable: true, bubbles: true });
+                            if (searchContainerRef.current?.closest('form')) {
+                              searchContainerRef.current.closest('form')?.dispatchEvent(event);
+                            }
+                          }, 100);
+                        }}
+                        className="bg-surface-container-lowest border border-outline-variant hover:border-primary p-3 rounded flex flex-col items-start gap-1 transition-colors group cursor-pointer text-left"
+                      >
+                        <span className="text-xs font-bold text-on-surface group-hover:text-primary truncate w-full">{stock.name}</span>
+                        <div className="flex justify-between items-center w-full">
+                          <span className="text-[9px] font-mono text-on-surface-variant">{stock.ticker}</span>
+                          <span className={`text-[8px] font-mono px-1 rounded ${stock.region === 'IND' ? 'bg-secondary/20 text-secondary' : 'bg-primary/20 text-primary'}`}>
+                            {stock.region}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -531,22 +633,42 @@ export default function ResearchPage() {
                         {memo.companyName || query}
                       </h2>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-[10px] font-mono text-on-surface-variant uppercase">Confidence in Verdict</div>
-                        <div className="text-sm font-mono font-bold text-primary">{memo.confidence}%</div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-[10px] font-mono text-on-surface-variant uppercase">Confidence in Verdict</div>
+                          <div className="text-sm font-mono font-bold text-primary">{memo.confidence}%</div>
+                        </div>
+                        <button
+                          onClick={scrollToInvestForm}
+                          className="hover:opacity-90 active:scale-95 transition-all bg-transparent border-0 cursor-pointer"
+                          title="Click to scroll to invest form"
+                        >
+                          <VerdictBadge verdict={memo.verdict} size="lg" />
+                        </button>
                       </div>
-                      <button
-                        onClick={scrollToInvestForm}
-                        className="hover:opacity-90 active:scale-95 transition-all bg-transparent border-0 cursor-pointer"
-                        title="Click to scroll to invest form"
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="flex gap-2 mb-2">
+                      <a
+                        href={`/api/research/${analysisId}/pdf`}
+                        target="_blank"
+                        className="text-[10px] font-mono border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded hover:bg-surface-container-high transition-colors"
                       >
-                        <VerdictBadge verdict={memo.verdict} size="lg" />
+                        EXPORT PDF
+                      </a>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/share/${analysisId}`);
+                          alert("Shareable link copied to clipboard!");
+                        }}
+                        className="text-[10px] font-mono border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded hover:bg-surface-container-high transition-colors"
+                      >
+                        COPY SHARE LINK
                       </button>
                     </div>
-                  </div>
 
-                  {/* Confidence bar */}
+                    {/* Confidence bar */}
                   <div className="w-full h-1 bg-surface-container-low rounded-full overflow-hidden border border-outline-variant/30">
                     <div
                       className={`h-full ${memo.verdict === "Invest" ? "bg-primary" : "bg-error"}`}
@@ -617,6 +739,9 @@ export default function ResearchPage() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Sources Panel */}
+                  {sources && sources.length > 0 && <SourcesPanel sources={sources} />}
                 </div>
 
                 {/* KPI Cards Grid */}
