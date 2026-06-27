@@ -127,7 +127,7 @@ export function getDigestEmailHtml(
             </tr>
             <tr style="color: #71717a; text-transform: uppercase; border-top: 1px solid #222225; padding-top: 6px;">
               <td style="padding-top: 6px; padding-bottom: 4px;">
-                Tracked Amount <span style="color: #6366f1; font-weight: bold; cursor: help;" title={`Total intended investment in ${curr === "$" ? "Dollars" : "Rupees"}.`}>[i]</span>
+                Tracked Amount <span style="color: #6366f1; font-weight: bold; cursor: help;" title="Total intended investment in ${curr === '$' ? 'Dollars' : 'Rupees'}.">[i]</span>
               </td>
               <td style="padding-top: 6px; padding-bottom: 4px; text-align: right;" colspan="2">
                 1Y Prediction Range <span style="color: #6366f1; font-weight: bold; cursor: help;" title="Forecasted target return range based on sentiment and trend.">[i]</span>

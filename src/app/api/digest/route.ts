@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         // Fetch live quote and weekly history for inline line chart
         let currentPrice = 0;
         let purchasePriceVal = Number(holding.purchase_price);
-        let historyPoints: number[] = [];
+        let historyPoints: any[] = [];
 
         try {
           const today = new Date();
@@ -97,8 +97,11 @@ export async function POST(request: Request) {
 
           if (Array.isArray(historyResult)) {
             historyPoints = historyResult
-              .map((p: any) => p.close || p.adjClose || 0)
-              .filter((p: number) => p > 0);
+              .map((p: any) => ({
+                date: p.date ? new Date(p.date).toISOString().split("T")[0] : "",
+                close: p.close || p.adjClose || 0
+              }))
+              .filter((p: any) => p.close > 0);
           }
         } catch (err) {
           console.error(`Failed live fetch for ${holding.ticker} in digest API:`, err);
@@ -136,7 +139,6 @@ export async function POST(request: Request) {
           gainLoss: parseFloat(gainLoss.toFixed(2)),
           gainLossPercent: parseFloat(gainLossPercent.toFixed(2)),
           predictionRange: rangeText,
-          sentimentScore: pred.score,
           guidance: pred.guidance,
           priceHistory: historyPoints,
         });
@@ -152,7 +154,6 @@ export async function POST(request: Request) {
           gainLoss: 0,
           gainLossPercent: 0,
           predictionRange: "+5% to +15%, midpoint +10%",
-          sentimentScore: 0.1,
           guidance: "hold",
           priceHistory: [],
         });
