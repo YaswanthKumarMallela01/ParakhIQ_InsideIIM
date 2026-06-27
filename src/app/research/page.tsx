@@ -533,7 +533,7 @@ export default function ResearchPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <div className="text-[10px] font-mono text-on-surface-variant uppercase">Confidence</div>
+                        <div className="text-[10px] font-mono text-on-surface-variant uppercase">Confidence in Verdict</div>
                         <div className="text-sm font-mono font-bold text-primary">{memo.confidence}%</div>
                       </div>
                       <button
@@ -588,7 +588,7 @@ export default function ResearchPage() {
                           type="number"
                           value={investAmount}
                           onChange={(e) => setInvestAmount(e.target.value)}
-                          placeholder="Amount in Rupees (e.g. 100000)"
+                          placeholder={`Amount in ${memo.kpis.currentPrice?.includes("$") || memo.kpis.marketCap?.includes("$") ? "USD (e.g. 1000)" : "Rupees (e.g. 100000)"}`}
                           min="1"
                           required
                           className="w-full bg-surface-container border border-outline-variant rounded py-2 pl-7 pr-3 text-xs font-mono text-on-surface focus:outline-none focus:border-primary transition-colors"

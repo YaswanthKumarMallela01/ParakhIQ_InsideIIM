@@ -1,18 +1,18 @@
 export interface DigestEmailHolding {
   company: string;
   ticker: string;
-  amountInvested: number;
   purchasePrice: number;
   currentPrice: number;
   gainLoss: number;
   gainLossPercent: number;
-  predictionRange: string;
-  sentimentScore: number;
+  amountInvested: number;
   guidance: string;
-  priceHistory: number[];
+  predictionRange: string;
+  priceHistory: { date: string; close: number }[];
+  currencySymbol?: string;
 }
 
-function generateSvgSparkline(prices: number[]): string {
+function generateSvgSparkline(prices: number[], currencySymbol?: string): string {
   if (!prices || prices.length < 2) {
     return `
       <div style="margin-top: 14px; margin-bottom: 14px; background-color: #131315; border: 1px solid #27272a; border-radius: 4px; padding: 16px; text-align: center; font-family: monospace; font-size: 10px; color: #71717a;">
@@ -55,8 +55,8 @@ function generateSvgSparkline(prices: number[]): string {
       </svg>
       <table style="width: 100%; margin-top: 6px; font-family: monospace; font-size: 8px; color: #71717a;">
         <tr>
-          <td>52W LOW: ₹${min.toFixed(2)}</td>
-          <td style="text-align: right;">52W HIGH: ₹${max.toFixed(2)}</td>
+          <td>52W LOW: ${currencySymbol || "₹"}${min.toFixed(2)}</td>
+          <td style="text-align: right;">52W HIGH: ${currencySymbol || "₹"}${max.toFixed(2)}</td>
         </tr>
       </table>
     </div>
@@ -71,6 +71,8 @@ export function getDigestEmailHtml(
 ) {
   const holdingsRows = holdings
     .map((h) => {
+      const curr = h.currencySymbol || "₹";
+      const locale = curr === "$" ? "en-US" : "en-IN";
       let badgeColor = "#10b981"; // Emerald
       let badgeText = "HOLD / ACCUMULATE";
       const guidanceClean = h.guidance.toLowerCase();
@@ -85,7 +87,7 @@ export function getDigestEmailHtml(
       const isGain = h.gainLoss >= 0;
       const gainColor = isGain ? "#10b981" : "#f43f5e";
 
-      const sparklineHtml = generateSvgSparkline(h.priceHistory);
+      const sparklineHtml = generateSvgSparkline(h.priceHistory.map(p => p.close), curr);
 
       return `
         <div style="background-color: #1a1a2e; border: 1px solid #3c4a42; border-radius: 6px; padding: 18px; margin-bottom: 20px; font-family: sans-serif;">
@@ -117,22 +119,22 @@ export function getDigestEmailHtml(
               </td>
             </tr>
             <tr style="color: #e5e1e4; font-size: 13px; font-weight: bold;">
-              <td style="padding-bottom: 12px;">₹${h.purchasePrice.toLocaleString("en-IN")}</td>
-              <td style="padding-bottom: 12px; text-align: center; color: #10b981;">₹${h.currentPrice.toLocaleString("en-IN")}</td>
+              <td style="padding-bottom: 12px;">${curr}${h.purchasePrice.toLocaleString(locale)}</td>
+              <td style="padding-bottom: 12px; text-align: center; color: #10b981;">${curr}${h.currentPrice.toLocaleString(locale)}</td>
               <td style="padding-bottom: 12px; text-align: right; color: ${gainColor};">
-                ${isGain ? "+" : ""}₹${h.gainLoss.toLocaleString("en-IN")} (${isGain ? "+" : ""}${h.gainLossPercent}%)
+                ${isGain ? "+" : ""}${curr}${h.gainLoss.toLocaleString(locale)} (${isGain ? "+" : ""}${h.gainLossPercent}%)
               </td>
             </tr>
             <tr style="color: #71717a; text-transform: uppercase; border-top: 1px solid #222225; padding-top: 6px;">
               <td style="padding-top: 6px; padding-bottom: 4px;">
-                Tracked Amount <span style="color: #6366f1; font-weight: bold; cursor: help;" title="Total intended investment in Rupees.">[i]</span>
+                Tracked Amount <span style="color: #6366f1; font-weight: bold; cursor: help;" title={`Total intended investment in ${curr === "$" ? "Dollars" : "Rupees"}.`}>[i]</span>
               </td>
               <td style="padding-top: 6px; padding-bottom: 4px; text-align: right;" colspan="2">
                 1Y Prediction Range <span style="color: #6366f1; font-weight: bold; cursor: help;" title="Forecasted target return range based on sentiment and trend.">[i]</span>
               </td>
             </tr>
             <tr style="color: #e5e1e4; font-size: 13px; font-weight: bold;">
-              <td>₹${h.amountInvested.toLocaleString("en-IN")}</td>
+              <td>${curr}${h.amountInvested.toLocaleString(locale)}</td>
               <td style="text-align: right; color: #4edea3;" colspan="2">${h.predictionRange}</td>
             </tr>
           </table>

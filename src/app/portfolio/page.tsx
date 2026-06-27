@@ -206,6 +206,8 @@ export default function PortfolioPage() {
             {holdings.map((holding) => {
               const pred = holding.latestPrediction;
               const isGain = holding.gain_loss >= 0;
+              const curr = holding.currencySymbol || "₹";
+              const locale = curr === "$" ? "en-US" : "en-IN";
 
               return (
                 <div
@@ -231,13 +233,13 @@ export default function PortfolioPage() {
                         <span>Intended Investment</span>
                         <span
                           className="text-secondary text-[10px] cursor-help font-bold select-none"
-                          title="The total amount of Rupees you plan to invest in this stock."
+                          title={`The total amount of ${curr === "$" ? "Dollars" : "Rupees"} you plan to invest in this stock.`}
                         >
                           [i]
                         </span>
                       </div>
                       <div className="text-base font-mono font-bold text-on-surface">
-                        ₹{Number(holding.amount_invested).toLocaleString("en-IN")}
+                        {curr}{Number(holding.amount_invested).toLocaleString(locale)}
                       </div>
                       <button
                         onClick={() => handleRemoveHolding(holding.id)}
@@ -264,7 +266,7 @@ export default function PortfolioPage() {
                           </span>
                         </div>
                         <div className="text-sm font-mono font-bold text-on-surface">
-                          ₹{holding.purchase_price.toLocaleString("en-IN")}
+                          {curr}{holding.purchase_price.toLocaleString(locale)}
                         </div>
                       </div>
 
@@ -280,7 +282,7 @@ export default function PortfolioPage() {
                           </span>
                         </div>
                         <div className="text-sm font-mono font-bold text-primary">
-                          ₹{holding.current_price.toLocaleString("en-IN")}
+                          {curr}{holding.current_price.toLocaleString(locale)}
                         </div>
                       </div>
 
@@ -312,7 +314,7 @@ export default function PortfolioPage() {
                           </span>
                         </div>
                         <div className="text-sm font-mono font-bold text-on-surface">
-                          ₹{holding.current_value.toLocaleString("en-IN")}
+                          {curr}{holding.current_value.toLocaleString(locale)}
                         </div>
                       </div>
 
@@ -333,7 +335,7 @@ export default function PortfolioPage() {
                           </span>
                         </div>
                         <div className={`text-base font-mono font-bold ${isGain ? "text-primary" : "text-error"}`}>
-                          {isGain ? "+" : ""}₹{holding.gain_loss.toLocaleString("en-IN")}
+                          {isGain ? "+" : ""}{curr}{holding.gain_loss.toLocaleString(locale)}
                         </div>
                       </div>
 
@@ -365,7 +367,7 @@ export default function PortfolioPage() {
                     {/* Right Column: Price Trend Line Chart */}
                     <div className="flex flex-col justify-between">
                       {holding.priceHistory && holding.priceHistory.length > 0 ? (
-                        <PriceChart data={holding.priceHistory} height={180} />
+                        <PriceChart data={holding.priceHistory} height={180} currencySymbol={curr} />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-surface-container-low border border-outline-variant rounded font-mono text-xs text-on-surface-variant min-h-[180px]">
                           Fetching live price trend data...

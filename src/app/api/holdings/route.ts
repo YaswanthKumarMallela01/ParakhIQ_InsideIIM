@@ -34,6 +34,7 @@ export async function GET() {
         let currentPrice = 0;
         let purchasePriceVal = Number(holding.purchase_price);
         let historyPoints: any[] = [];
+        const currencySymbol = (holding.ticker.endsWith(".NS") || holding.ticker.endsWith(".BO")) ? "₹" : "$";
 
         try {
           const today = new Date();
@@ -117,6 +118,7 @@ export async function GET() {
           gain_loss_percent: parseFloat(gainLossPercent.toFixed(2)),
           priceHistory: historyPoints,
           latestPrediction,
+          currencySymbol,
         };
       })
     );
@@ -161,6 +163,7 @@ export async function POST(request: Request) {
         company,
         ticker,
         amount_invested: Number(amountInvested),
+        purchase_price: purchasePrice,
       })
       .select()
       .single();
